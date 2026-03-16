@@ -31,6 +31,25 @@ void setup() {
     Serial.begin(115200);
     Serial.println("Robot 4WD Initialized!");
 }
+// --- Глобальные переменные ---
+volatile uint32_t lastUpdateTime = 0; 
+
+/**
+ * Функция проверки безопасности.
+ * Если связь потеряна (команд нет > 500 мс), останавливаем моторы.
+ */
+void checkFailsafe() {
+    uint32_t currentTime = millis(); // Берем текущее время
+    
+    // Проверяем разницу между "сейчас" и "последней командой"
+    if (currentTime - lastUpdateTime > 500) {
+        // Вызываем нашу функцию со скоростью 0
+        motor_set_speed(&motorL, 0);
+        motor_set_speed(&motorR, 0);
+        Serial.println("Failsafe activated: Motors stopped due to lost connection."); //вывод в консоль 
+        
+    }
+}
 
 void loop() {
     // Пока оставим пустым, здесь будет Wi-Fi и FSM
