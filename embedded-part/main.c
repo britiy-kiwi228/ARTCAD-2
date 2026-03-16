@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include "config.h"
 #include "motor_control.h"
-
+#include "WiFi.h"
 // --- 1. Создание объектов моторов ---
 // Мы выделяем память под две структуры типа Motor_t.
 // Эти переменные глобальные, чтобы они были доступны во всём файле.
@@ -47,7 +47,7 @@ void checkFailsafe() {
         motor_set_speed(&motorL, 0);
         motor_set_speed(&motorR, 0);
         Serial.println("Failsafe activated: Motors stopped due to lost connection."); //вывод в консоль 
-        
+
     }
 }
 
