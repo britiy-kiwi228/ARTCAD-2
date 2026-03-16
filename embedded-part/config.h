@@ -9,8 +9,16 @@
 #define MOTOR_R_IN1 27
 #define MOTOR_R_IN2 14
 
+
+// --- Настройки для Сервопривода ---
 // Пин для подключения сервопривода
 #define SERVO_SIG 15
+#define SERVO_FREQ 50          // 50 Гц (стандарт для аналоговых серво)
+#define SERVO_RES  10          // 10 бит разрешение (0...1023)
+// Рабочие параметры MG995 (в долях от разрешения)
+#define SERVO_MIN_DUTY 26      // ~0.5 мс (0 градусов)
+#define SERVO_MAX_DUTY 123     // ~2.4 мс (180 градусов)
+
 // Параметры для настройки ШИМ
 #define PWM_FREQ 5000
 #define PWM_RES 8 
