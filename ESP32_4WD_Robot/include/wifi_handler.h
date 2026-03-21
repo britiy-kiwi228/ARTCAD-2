@@ -3,9 +3,14 @@
 
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h> // библиотека для асинхронного сервера
-
+#include "motor_control.h" // для управления моторами
+#include "servo_control.h" // для управления сервоприводом
 // Параметры сети
 #include "secrets.h"
+// объявления экстерных переменных 
+extern Motor_t motorL;
+extern Motor_t motorR;
+extern Servo_t servoWeapon;
 
 // Прототипы функций
 void wifi_init();

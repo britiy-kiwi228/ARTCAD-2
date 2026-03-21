@@ -2,13 +2,15 @@
 #include "config.h"
 #include "motor_control.h"
 #include "WiFi.h"
+#include "wifi_handler.h"
 // --- 1. Создание объектов моторов ---
 // Мы выделяем память под две структуры типа Motor_t.
 // Эти переменные глобальные, чтобы они были доступны во всём файле.
 
 Motor_t motorL; // Левый борт
 Motor_t motorR; // Правый борт
-
+Servo_t servoWeapon; // Сервопривод для оружия
+volatile uint32_t lastUpdateTime = 0; // Время последней полученной команды (для Failsafe)
 void setup() {
     // --- 2. Заполнение данных левого мотора ---
     motorL.pwm_pin = MOTOR_L_PWM;
@@ -26,13 +28,14 @@ void setup() {
     // Вызываем нашу функцию, которая настроит пины и ШИМ внутри ESP32
     motor_init(&motorL);
     motor_init(&motorR);
+    wifi_init();
 
     // Для отладки откроем последовательный порт (монитор порта)
     Serial.begin(115200);
     Serial.println("Robot 4WD Initialized!");
+    lastUpdateTime = millis(); // Инициализируем время последней команды
 }
-// --- Глобальные переменные ---
-volatile uint32_t lastUpdateTime = 0; 
+
 
 /**
  * Функция проверки безопасности.
