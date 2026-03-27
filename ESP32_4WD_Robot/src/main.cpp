@@ -9,9 +9,11 @@
 
 Motor_t motorL; // Левый борт
 Motor_t motorR; // Правый борт
-Servo_t servoWeapon; // Сервопривод для оружия
+Servo_t servoWeapon; 
 volatile uint32_t lastUpdateTime = 0; // Время последней полученной команды (для Failsafe)
 void setup() {
+    Serial.begin(115200);
+    Serial.println("Robot 4WD Initialized!");
     // --- 2. Заполнение данных левого мотора ---
     motorL.pwm_pin = MOTOR_L_PWM;
     motorL.in1_pin = MOTOR_L_IN1;
@@ -31,8 +33,7 @@ void setup() {
     wifi_init();
 
     // Для отладки откроем последовательный порт (монитор порта)
-    Serial.begin(115200);
-    Serial.println("Robot 4WD Initialized!");
+    
     lastUpdateTime = millis(); // Инициализируем время последней команды
 }
 
