@@ -5,6 +5,7 @@
 // Создаем объект сервера на порту 80 (стандарт для HTTP)
 AsyncWebServer server(80);
 extern bool isFailsafeActive; // Флаг для отслеживания состояния Failsafe
+extern volatile uint32_t lastUpdateTime; // Время последней полученной команды
 
 void wifi_init() {
     // 1. Запуск точки доступа (Access Point)
@@ -26,17 +27,21 @@ void wifi_init() {
             int valL = request->getParam("l")->value().toInt();
             int valR = request->getParam("r")->value().toInt();
             
-            // Управляем моторами
-            motor_set_speed(&motorL, valL);
-            motor_set_speed(&motorR, valR);
-            
-            
+            // Валидация параметров: скорость должна быть в диапазоне -255 до 255
+            if (valL >= -255 && valL <= 255 && valR >= -255 && valR <= 255) {
+                // Управляем моторами
+                motor_set_speed(&motorL, valL);
+                motor_set_speed(&motorR, valR);
+            }
         }
 
         // Если прислали параметр 's' (servo)
         if (request->hasParam("s")) {
             int valS = request->getParam("s")->value().toInt();
-            servo_set_angle(&servoWeapon, valS);
+            // Валидация параметра: угол должен быть в диапазоне 0-180 градусов
+            if (valS >= 0 && valS <= 180) {
+                servo_set_angle(&servoWeapon, valS);
+            }
         }
 
         // Отправляем ответ телефону, что всё ок (код 200)

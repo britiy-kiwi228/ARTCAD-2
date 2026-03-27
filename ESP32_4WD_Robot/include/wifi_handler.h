@@ -11,6 +11,8 @@
 extern Motor_t motorL;
 extern Motor_t motorR;
 extern Servo_t servoWeapon;
+extern volatile uint32_t lastUpdateTime;
+extern bool isFailsafeActive;
 
 // Прототипы функций
 void wifi_init();

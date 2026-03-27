@@ -25,6 +25,6 @@
 // Каналы для ШИМ
 #define LEDC_CH_L 0
 #define LEDC_CH_R 1
-#define LEDC_CH_SERVO 2
+#define LEDC_CH_SERVO 4  // Используем Timer 1 (избегаем конфликта с моторами на Timer 0)
 
 #endif

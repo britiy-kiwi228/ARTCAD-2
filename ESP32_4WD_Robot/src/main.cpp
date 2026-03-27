@@ -33,7 +33,7 @@ void setup() {
     motorR.in2_pin = MOTOR_R_IN2;
     motorR.ledc_channel = LEDC_CH_R;
     // --- 4. Заполнение данных сервопривода ---
-    servoWeapon.sig_pin = SERVO_SIG;
+    servoWeapon.pin = SERVO_SIG;  // Исправлено: использовать 'pin' вместо 'sig_pin'
     servoWeapon.ledc_channel = LEDC_CH_SERVO;
 
 
@@ -60,7 +60,8 @@ void checkFailsafe() {
     uint32_t currentTime = millis(); // Берем текущее время
     
     // Проверяем разницу между "сейчас" и "последней командой"
-    if (currentTime - lastUpdateTime > 500 && !isFailsafeActive) {
+    // Используем безопасное сравнение для защиты от переполнения millis()
+    if ((uint32_t)(currentTime - lastUpdateTime) > 500 && !isFailsafeActive) {
         isFailsafeActive = true;
         currentState = STATE_EMERGENCY; // Переходим в аварийное состояние
         // Вызываем нашу функцию со скоростью 0
