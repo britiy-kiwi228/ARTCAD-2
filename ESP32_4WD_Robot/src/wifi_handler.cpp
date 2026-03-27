@@ -4,6 +4,7 @@
 
 // Создаем объект сервера на порту 80 (стандарт для HTTP)
 AsyncWebServer server(80);
+extern bool isFailsafeActive; // Флаг для отслеживания состояния Failsafe
 
 void wifi_init() {
     // 1. Запуск точки доступа (Access Point)
@@ -16,7 +17,8 @@ void wifi_init() {
     // 2. Описываем логику обработки запроса "/move"
     // Это называется "Handler" или "Route"
     server.on("/move", HTTP_GET, [](AsyncWebServerRequest *request) {
-        
+        isFailsafeActive = false; // Получили команду - отключаем Failsafe
+        lastUpdateTime = millis(); // Обновляем время последней команды
         // Проверяем, прислал ли телефон параметры 'l' и 'r'
         if (request->hasParam("l") && request->hasParam("r")) {
             
@@ -28,15 +30,13 @@ void wifi_init() {
             motor_set_speed(&motorL, valL);
             motor_set_speed(&motorR, valR);
             
-            // ОБЯЗАТЕЛЬНО обновляем время последней команды для Failsafe
-            lastUpdateTime = millis();
+            
         }
 
         // Если прислали параметр 's' (servo)
         if (request->hasParam("s")) {
             int valS = request->getParam("s")->value().toInt();
             servo_set_angle(&servoWeapon, valS);
-            lastUpdateTime = millis();
         }
 
         // Отправляем ответ телефону, что всё ок (код 200)
