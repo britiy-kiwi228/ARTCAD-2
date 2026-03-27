@@ -11,6 +11,13 @@ Motor_t motorL; // Левый борт
 Motor_t motorR; // Правый борт
 Servo_t servoWeapon; 
 volatile uint32_t lastUpdateTime = 0; // Время последней полученной команды (для Failsafe)
+bool isFailsafeActive = false; // Флаг для отслеживания состояния Failsafe
+typedef enum{
+    STATE_IDLE, // Робот стоит на месте
+    STATE_DRIVING, // Робот движется
+    STATE_EMERGENCY // Аварийное состояние 
+} RobotState_t;
+RobotState_t currentState = STATE_IDLE; // Начальное состояние робота
 void setup() {
     Serial.begin(115200);
     
@@ -53,7 +60,9 @@ void checkFailsafe() {
     uint32_t currentTime = millis(); // Берем текущее время
     
     // Проверяем разницу между "сейчас" и "последней командой"
-    if (currentTime - lastUpdateTime > 500) {
+    if (currentTime - lastUpdateTime > 500 && !isFailsafeActive) {
+        isFailsafeActive = true;
+        currentState = STATE_EMERGENCY; // Переходим в аварийное состояние
         // Вызываем нашу функцию со скоростью 0
         motor_set_speed(&motorL, 0);
         motor_set_speed(&motorR, 0);
@@ -63,5 +72,17 @@ void checkFailsafe() {
 }
 
 void loop() {
-    // Пока оставим пустым, здесь будет Wi-Fi и FSM
+    checkFailsafe(); // Проверяем безопасность в каждом цикле
+    switch (currentState) {
+        case STATE_IDLE:
+            // В режиме ожидания можно выполнять какие-то фоновые задачи
+            break;
+        case STATE_DRIVING:
+            // Здесь будет чето будет 
+            break;
+        case STATE_EMERGENCY:
+            // Здесь будет логика для аварийного состояния
+            break;
+    }
+    
 }
