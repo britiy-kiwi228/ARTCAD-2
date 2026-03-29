@@ -1,7 +1,7 @@
 #ifndef WEB_INTERFACE_H
 #define WEB_INTERFACE_H
 
-// HTML/CSS/JS код интерфейса управления роботом
+// HTML/CSS/JS код интерфейса управления роботом с ВИРТУАЛЬНЫМ ДЖОЙСТИКОМ
 // Хранится в PROGMEM для экономии оперативной памяти ESP32
 const char index_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
@@ -11,498 +11,499 @@ const char index_html[] PROGMEM = R"rawliteral(
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>4WD Robot Control</title>
     <style>
-        /* === ГЛОБАЛЬНЫЕ СТИЛИ === */
+        /* === БАЗОВЫЕ СТИЛИ === */
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
 
-        /* Темная тема: dark colorable для промышленного стиля */
         body {
-            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-            color: #e0e0e0;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            min-height: 100vh;
+            background: linear-gradient(135deg, #1e1e1e 0%, #0a0a0a 100%);
+            color: #e0e0e0;
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
-            padding: 10px;
-        }
-
-        /* Основной контейнер */
-        .container {
-            width: 100%;
-            max-width: 500px;
-            background: #1a1a1a;
-            border-radius: 15px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 255, 100, 0.2);
-            border: 1px solid #00ff64;
+            min-height: 100vh;
             padding: 20px;
         }
 
-        /* Заголовок */
+        /* === КОНТЕЙНЕР === */
+        .container {
+            width: 100%;
+            max-width: 500px;
+            background: rgba(30, 30, 30, 0.95);
+            border-radius: 20px;
+            padding: 30px 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
         h1 {
             text-align: center;
-            font-size: 28px;
-            margin-bottom: 20px;
-            color: #00ff64;
-            text-shadow: 0 0 10px rgba(0, 255, 100, 0.3);
-        }
-
-        /* === D-PAD (КРЕСТОВИНА УПРАВЛЕНИЯ) === */
-        .dpad-section {
-            display: flex;
-            justify-content: center;
-            margin-bottom: 30px;
-        }
-
-        .dpad {
-            position: relative;
-            width: 200px;
-            height: 200px;
-        }
-
-        /* Кнопки D-pad */
-        .dpad-btn {
-            position: absolute;
-            width: 60px;
-            height: 60px;
-            border: 2px solid #00ff64;
-            background: #0f3d1f;
-            color: #00ff64;
             font-size: 24px;
-            font-weight: bold;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.1s ease;
-            user-select: none;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            margin-bottom: 30px;
+            color: #4daeff;
+            text-shadow: 0 0 10px rgba(77, 174, 255, 0.3);
         }
 
-        /* Вперед */
-        .dpad-btn.up {
-            top: 0;
-            left: 50%;
-            transform: translateX(-50%);
-        }
-
-        /* Назад */
-        .dpad-btn.down {
-            bottom: 0;
-            left: 50%;
-            transform: translateX(-50%);
-        }
-
-        /* Влево */
-        .dpad-btn.left {
-            left: 0;
-            top: 50%;
-            transform: translateY(-50%);
-        }
-
-        /* Вправо */
-        .dpad-btn.right {
-            right: 0;
-            top: 50%;
-            transform: translateY(-50%);
-        }
-
-        /* Эффект нажатия кнопки */
-        .dpad-btn:active,
-        .dpad-btn.pressed {
-            background: #00ff64;
-            color: #000;
-            box-shadow: 0 0 15px rgba(0, 255, 100, 0.8);
-            transform: translate(-50%, -50%) scale(0.95);
-        }
-
-        .dpad-btn.left:active,
-        .dpad-btn.left.pressed {
-            transform: translateY(-50%) scale(0.95);
-        }
-
-        .dpad-btn.right:active,
-        .dpad-btn.right.pressed {
-            transform: translateY(-50%) scale(0.95);
-        }
-
-        .dpad-btn.down:active,
-        .dpad-btn.down.pressed {
-            transform: translateX(-50%) scale(0.95);
-        }
-
-        /* === СЛАЙДЕРЫ === */
-        .slider-section {
+        /* === КОНТРОЛЬ СКОРОСТИ === */
+        .speed-control {
             margin-bottom: 25px;
-        }
-
-        .slider-group {
-            margin-bottom: 20px;
         }
 
         .slider-label {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
             font-size: 14px;
-            color: #b0b0b0;
+            color: #a0a0a0;
         }
 
-        .slider-label span {
-            font-weight: 600;
-            color: #00ff64;
+        .slider-label .value {
+            color: #4daeff;
+            font-weight: bold;
         }
 
-        /* Кастомизация input[type="range"] */
         input[type="range"] {
             width: 100%;
             height: 6px;
+            border-radius: 3px;
+            background: linear-gradient(to right, #444, #666);
+            outline: none;
             -webkit-appearance: none;
             appearance: none;
-            background: #333;
-            border-radius: 3px;
-            outline: none;
-            cursor: pointer;
         }
 
-        /* Ползунок (thumb) для Webkit браузеров (Chrome, Safari) */
         input[type="range"]::-webkit-slider-thumb {
             -webkit-appearance: none;
             appearance: none;
-            width: 18px;
-            height: 18px;
+            width: 24px;
+            height: 24px;
             border-radius: 50%;
-            background: #00ff64;
+            background: linear-gradient(135deg, #4daeff, #00d4ff);
             cursor: pointer;
-            box-shadow: 0 0 10px rgba(0, 255, 100, 0.6);
+            box-shadow: 0 0 10px rgba(77, 174, 255, 0.5);
         }
 
-        /* Ползунок для Firefox */
         input[type="range"]::-moz-range-thumb {
-            width: 18px;
-            height: 18px;
+            width: 24px;
+            height: 24px;
             border-radius: 50%;
-            background: #00ff64;
+            background: linear-gradient(135deg, #4daeff, #00d4ff);
             cursor: pointer;
             border: none;
-            box-shadow: 0 0 10px rgba(0, 255, 100, 0.6);
+            box-shadow: 0 0 10px rgba(77, 174, 255, 0.5);
         }
 
-        /* === КНОПКИ === */
-        .button-section {
+        /* === ДЖОЙСТИК КОНТЕЙНЕР === */
+        .joystick-container {
             display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
+            justify-content: center;
+            align-items: center;
+            margin: 30px 0;
+            flex-direction: column;
         }
 
-        button {
-            flex: 1;
-            padding: 12px 20px;
+        /* Canvas для виртуального джойстика */
+        #joystickCanvas {
+            border: 2px solid rgba(77, 174, 255, 0.3);
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, rgba(77, 174, 255, 0.1), rgba(0, 0, 0, 0.3));
+            cursor: grab;
+            max-width: 100%;
+            display: block;
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        #joystickCanvas:active {
+            cursor: grabbing;
+        }
+
+        /* Текст подсказка */
+        .joystick-hint {
+            margin-top: 15px;
+            font-size: 12px;
+            color: #666;
+            text-align: center;
+        }
+
+        /* === КНОПКА СТОП === */
+        .stop-btn {
+            width: 100%;
+            padding: 15px;
+            margin-top: 30px;
             border: none;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #ff4444, #ff0000);
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
             cursor: pointer;
             transition: all 0.2s ease;
+            box-shadow: 0 4px 15px rgba(255, 0, 0, 0.3);
         }
 
-        /* Кнопка СТОП (ярко-красная) */
-        .btn-stop {
-            background: linear-gradient(135deg, #ff2e2e 0%, #cc0000 100%);
-            color: white;
-            grid-column: 1 / -1;
+        .stop-btn:hover {
+            background: linear-gradient(135deg, #ff6666, #ff2222);
+            box-shadow: 0 6px 20px rgba(255, 0, 0, 0.5);
         }
 
-        .btn-stop:active {
-            background: linear-gradient(135deg, #ff1a1a 0%, #990000 100%);
-            box-shadow: 0 0 15px rgba(255, 46, 46, 0.8);
+        .stop-btn:active {
+            transform: scale(0.98);
         }
 
-        /* Статус индикатор */
-        .status-indicator {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: #888;
-            display: inline-block;
-            margin-right: 8px;
-            transition: background 0.3s ease;
-        }
-
-        .status-indicator.connected {
-            background: #00ff64;
-            box-shadow: 0 0 8px rgba(0, 255, 100, 0.6);
-        }
-
-        .status-text {
-            font-size: 12px;
-            color: #888;
+        /* === СТАТУС === */
+        .status {
             text-align: center;
-            margin-top: 10px;
+            margin-top: 20px;
+            font-size: 12px;
+            color: #666;
         }
 
-        /* === АДАПТИВНОСТЬ (MOBILE-FIRST) === */
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+            background-color: #ff4444;
+            transition: background-color 0.3s ease;
+        }
+
+        .status-indicator.online {
+            background-color: #44ff44;
+            box-shadow: 0 0 5px rgba(68, 255, 68, 0.6);
+        }
+
+        /* === АДАПТИВНАЯ ВЕРСТКА === */
         @media (max-width: 480px) {
             .container {
-                padding: 15px;
-                max-width: 100%;
+                padding: 20px 10px;
             }
 
             h1 {
-                font-size: 24px;
-                margin-bottom: 15px;
-            }
-
-            .dpad {
-                width: 180px;
-                height: 180px;
-            }
-
-            .dpad-btn {
-                width: 50px;
-                height: 50px;
                 font-size: 20px;
+                margin-bottom: 20px;
             }
 
-            input[type="range"] {
-                height: 5px;
-            }
-
-            .slider-label {
-                font-size: 12px;
+            #joystickCanvas {
+                max-width: 200px;
+                height: auto;
             }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- Заголовок -->
-        <h1>🤖 Robot Control</h1>
+        <h1>🤖 4WD Robot Control</h1>
 
-        <!-- D-PAD управление движением -->
-        <div class="dpad-section">
-            <div class="dpad">
-                <!-- Вперед -->
-                <button class="dpad-btn up" id="btnUp" data-direction="forward">▲</button>
-                <!-- Назад -->
-                <button class="dpad-btn down" id="btnDown" data-direction="backward">▼</button>
-                <!-- Влево -->
-                <button class="dpad-btn left" id="btnLeft" data-direction="left">◄</button>
-                <!-- Вправо -->
-                <button class="dpad-btn right" id="btnRight" data-direction="right">►</button>
+        <!-- Контроль скорости -->
+        <div class="speed-control">
+            <div class="slider-label">
+                <span>Скорость (0-255)</span>
+                <span class="value" id="speedValue">128</span>
             </div>
+            <input type="range" id="speedSlider" min="0" max="255" value="128">
         </div>
 
-        <!-- Слайдеры управления -->
-        <div class="slider-section">
-            <!-- Слайдер скорости (0-255) -->
-            <div class="slider-group">
-                <div class="slider-label">
-                    <span>Скорость (PWM)</span>
-                    <span id="speedValue">128</span>
-                </div>
-                <input type="range" id="speedSlider" min="0" max="255" value="128">
+        <!-- Контроль серво -->
+        <div class="speed-control">
+            <div class="slider-label">
+                <span>Позиция серво (0-180°)</span>
+                <span class="value" id="servoValue">90</span>
             </div>
+            <input type="range" id="servoSlider" min="0" max="180" value="90">
+        </div>
 
-            <!-- Слайдер позиции серво (0-180 градусов) -->
-            <div class="slider-group">
-                <div class="slider-label">
-                    <span>Сервопривод (°)</span>
-                    <span id="servoValue">90</span>
-                </div>
-                <input type="range" id="servoSlider" min="0" max="180" value="90">
+        <!-- ВИРТУАЛЬНЫЙ ДЖОЙСТИК -->
+        <div class="joystick-container">
+            <canvas 
+                id="joystickCanvas" 
+                width="250" 
+                height="250"
+            ></canvas>
+            <div class="joystick-hint">
+                Потяни джойстик для управления движением
             </div>
         </div>
 
         <!-- Кнопка СТОП -->
-        <div class="button-section">
-            <button class="btn-stop" id="btnStop">⏹ СТОП</button>
-        </div>
+        <button class="stop-btn" id="emergencyStop">🛑 СТОП</button>
 
-        <!-- Статус соединения -->
-        <div class="status-text">
+        <div class="status">
             <span class="status-indicator" id="statusIndicator"></span>
-            <span id="statusText">Подключение...</span>
+            <span id="statusText">Готов к управлению</span>
         </div>
     </div>
 
     <script>
-        // === КОНФИГУРАЦИЯ И ПЕРЕМЕННЫЕ ===
-        // Объект состояния робота
-        const robotState = {
-            speedLeft: 0,      // Скорость левого мотора (-255 до 255)
-            speedRight: 0,     // Скорость правого мотора (-255 до 255)
-            servoAngle: 90,    // Угол серво (0-180°)
-            speed: 128,        // Текущая скорость из слайдера
-            isMoving: false,   // Флаг: робот движется или стоит
-            lastCommandTime: 0, // Время последней отправленной команды
+        // === КОНФИГУРАЦИЯ ===
+        const CONFIG = {
+            throttleMs: 50,      // Минимальный интервал между командами (50мс = 20 команд/сек)
+            joystickRadius: 80,  // Радиус движения джойстика в пиксели
+            canvasSize: 250      // Размер canvas элемента (квадратный)
         };
 
-        // Переменные для throttle (защита от перегрузки ESP32)
-        const THROTTLE_DELAY = 75; // мс (отправлять команду не чаще, чем раз в 75 мс)
-        let lastThrottleTime = 0;
+        // === ПЕРЕМЕННЫЕ СОСТОЯНИЯ ===
+        let lastCommandTime = 0;
+        let currentSpeed = 128;      // Значение скорости из слайдера (0-255)
+        let currentServo = 90;       // Значение угла серво из слайдера (0-180)
+        let joystickActive = false;  // Флаг: пользователь держит джойстик
+        let queuedCommand = null;    // Очередная команда, если throttle активен
+        let lastSentCommand = { l: 0, r: 0, s: 90 }; // Последняя отправленная команда
 
-        // DOM элементы
-        const btnUp = document.getElementById('btnUp');
-        const btnDown = document.getElementById('btnDown');
-        const btnLeft = document.getElementById('btnLeft');
-        const btnRight = document.getElementById('btnRight');
-        const btnStop = document.getElementById('btnStop');
+        // === ЭЛЕМЕНТЫ DOM ===
+        const canvas = document.getElementById('joystickCanvas');
+        const ctx = canvas.getContext('2d');
         const speedSlider = document.getElementById('speedSlider');
         const servoSlider = document.getElementById('servoSlider');
-        const speedValue = document.getElementById('speedValue');
-        const servoValue = document.getElementById('servoValue');
-        const statusIndicator = document.getElementById('statusIndicator');
         const statusText = document.getElementById('statusText');
+        const statusIndicator = document.getElementById('statusIndicator');
+
+        // === ОБНОВЛЕНИЕ СЛАЙДЕРА СКОРОСТИ ===
+        speedSlider.addEventListener('input', (e) => {
+            currentSpeed = parseInt(e.target.value);
+            document.getElementById('speedValue').textContent = currentSpeed;
+        });
+
+        // === ОБНОВЛЕНИЕ СЛАЙДЕРА СЕРВО ===
+        servoSlider.addEventListener('input', (e) => {
+            currentServo = parseInt(e.target.value);
+            document.getElementById('servoValue').textContent = currentServo;
+            // Отправляем команду для обновления угла серво
+            sendCommand(lastSentCommand.l, lastSentCommand.r, currentServo);
+        });
 
         // === ФУНКЦИЯ: Отправка команды на ESP32 ===
-        async function sendCommand(l, r, s = null) {
-            // Используем сервопривод из слайдера, если не передан явно
-            const servoAngle = s !== null ? s : robotState.servoAngle;
+        async function sendCommand(left, right, servo) {
+            const now = Date.now();
+            
+            // Сохраняем последнюю отправленную команду
+            lastSentCommand = { l: left, r: right, s: servo };
 
-            // Формируем URL запроса: /move?l=[левый_мотор]&r=[правый_мотор]&s=[серво]
-            const url = `/move?l=${l}&r=${r}&s=${servoAngle}`;
+            // THROTTLE: если прошло меньше чем throttleMs, ставим в очередь
+            if (now - lastCommandTime < CONFIG.throttleMs) {
+                queuedCommand = { left, right, servo };
+                return;
+            }
+
+            // Отправляем команду
+            lastCommandTime = now;
+            queuedCommand = null;
 
             try {
-                // Отправляем асинхронный GET-запрос
-                const response = await fetch(url);
-
+                // Формируем URL: /move?l=[значение]&r=[значение]&s=[угол]
+                const response = await fetch(`/move?l=${Math.round(left)}&r=${Math.round(right)}&s=${Math.round(servo)}`);
+                
                 if (response.ok) {
-                    // Успешный ответ - обновляем статус
-                    statusIndicator.classList.add('connected');
-                    statusText.textContent = 'Подключено ✓';
+                    statusText.textContent = `✓ L:${Math.round(left)} R:${Math.round(right)} S:${Math.round(servo)}`;
+                    statusIndicator.classList.add('online');
+                    
+                    // Если была очередная команда, отправляем её через промежуток времени
+                    if (queuedCommand) {
+                        setTimeout(() => {
+                            sendCommand(queuedCommand.left, queuedCommand.right, queuedCommand.servo);
+                        }, CONFIG.throttleMs);
+                    }
                 } else {
-                    statusIndicator.classList.remove('connected');
-                    statusText.textContent = 'Ошибка: ' + response.status;
+                    statusText.textContent = `✗ Ошибка: ${response.status}`;
+                    statusIndicator.classList.remove('online');
                 }
             } catch (error) {
-                // Ошибка соединения
-                statusIndicator.classList.remove('connected');
-                statusText.textContent = 'Нет соединения';
-                console.error('Ошибка отправки команды:', error);
+                statusText.textContent = `✗ Нет соединения`;
+                statusIndicator.classList.remove('online');
             }
         }
 
-        // === ФУНКЦИЯ: Throttle (защита от перегрузки) ===
-        // Ограничивает частоту отправки команд
-        function throttleCommand(callback) {
-            const now = Date.now();
+        // === ФУНКЦИЯ: Рисование джойстика на Canvas ===
+        function drawJoystick(thumbX = 0, thumbY = 0) {
+            const centerX = CONFIG.canvasSize / 2;
+            const centerY = CONFIG.canvasSize / 2;
+            const radius = CONFIG.joystickRadius;
 
-            // Проверяем, прошло ли достаточно времени с последней команды
-            if (now - lastThrottleTime >= THROTTLE_DELAY) {
-                lastThrottleTime = now;
-                callback();
+            // Очищаем canvas от предыдущего рисунка
+            ctx.clearRect(0, 0, CONFIG.canvasSize, CONFIG.canvasSize);
+
+            // === РИСУЕМ ВНЕШНИЙ КРУГ (BOUNDARY) ===
+            ctx.strokeStyle = 'rgba(77, 174, 255, 0.4)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // === РИСУЕМ СЕТКУ (КРЕСТОВИНА) ===
+            ctx.strokeStyle = 'rgba(77, 174, 255, 0.15)';
+            ctx.lineWidth = 1;
+            
+            // Горизонтальная линия
+            ctx.beginPath();
+            ctx.moveTo(centerX - radius, centerY);
+            ctx.lineTo(centerX + radius, centerY);
+            ctx.stroke();
+            
+            // Вертикальная линия
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY - radius);
+            ctx.lineTo(centerX, centerY + radius);
+            ctx.stroke();
+
+            // === РИСУЕМ ЦЕНТРАЛЬНУЮ ТОЧКУ ===
+            ctx.fillStyle = 'rgba(77, 174, 255, 0.6)';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // === ОГРАНИЧИВАЕМ ДВИЖЕНИЕ THUMB ВНУТРИ КРУГА ===
+            const distance = Math.sqrt(thumbX * thumbX + thumbY * thumbY);
+            if (distance > radius) {
+                const angle = Math.atan2(thumbY, thumbX);
+                thumbX = Math.cos(angle) * radius;
+                thumbY = Math.sin(angle) * radius;
             }
+
+            // === РИСУЕМ THUMB (УКАЗАТЕЛЬ ДЖОЙСТИКА) ===
+            const thumbRadius = 20;
+            ctx.fillStyle = joystickActive 
+                ? 'rgba(77, 174, 255, 0.9)' 
+                : 'rgba(77, 174, 255, 0.6)';
+            ctx.shadowColor = 'rgba(77, 174, 255, 0.8)';
+            ctx.shadowBlur = 15;
+            ctx.beginPath();
+            ctx.arc(centerX + thumbX, centerY + thumbY, thumbRadius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            return { thumbX, thumbY, distance: distance > radius ? radius : distance };
         }
 
-        // === ФУНКЦИЯ: Обновление слайдера скорости ===
-        speedSlider.addEventListener('input', (e) => {
-            robotState.speed = parseInt(e.target.value);
-            speedValue.textContent = robotState.speed;
-
-            // Если робот движется, отправляем обновленную скорость
-            if (robotState.isMoving) {
-                throttleCommand(() => {
-                    sendCommand(robotState.speedLeft, robotState.speedRight);
-                });
-            }
-        });
-
-        // === ФУНКЦИЯ: Обновление слайдера серво ===
-        servoSlider.addEventListener('input', (e) => {
-            robotState.servoAngle = parseInt(e.target.value);
-            servoValue.textContent = robotState.servoAngle;
-
-            // Отправляем команду с новым углом серво (throttle)
-            throttleCommand(() => {
-                sendCommand(robotState.speedLeft, robotState.speedRight, robotState.servoAngle);
-            });
-        });
-
-        // === ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ: Установка скорости боков ===
-        function setMotorSpeeds(left, right) {
-            robotState.speedLeft = left;
-            robotState.speedRight = right;
-            robotState.isMoving = !(left === 0 && right === 0);
+        // === ФУНКЦИЯ: Преобразование координат джойстика в команды движения (TANK DRIVE) ===
+        function joystickToMotorCommand(thumbX, thumbY, maxSpeed = currentSpeed) {
+            const radius = CONFIG.joystickRadius;
+            
+            // Нормализуем расстояние от центра (0..1)
+            const normalizedDistance = Math.min(1, Math.sqrt(thumbX * thumbX + thumbY * thumbY) / radius);
+            
+            // Вычисляем угол от центра джойстика (в радианах)
+            // 0 радиан = вправо, PI/2 = вниз, PI/-PI = влево, -PI/2 = вверх
+            const angle = Math.atan2(thumbY, thumbX);
+            
+            // === ТАНК-КОНТРОЛЬ ФОРМУЛА ===
+            // forward = движение вперёд (зависит от угла и расстояния)
+            // turn = поворот (положительный = вправо, отрицательный = влево)
+            // left_speed = forward - turn
+            // right_speed = forward + turn
+            
+            // Используем atan2 с корректировкой угла, чтобы "вверх" был вперёд (0°)
+            const correctAngle = angle + Math.PI / 2; // Смещаем так, чтобы 0 был вверху
+            
+            // Вычисляем forward и turn
+            const forward = normalizedDistance * Math.cos(correctAngle) * maxSpeed;
+            const turn = normalizedDistance * Math.sin(correctAngle) * maxSpeed;
+            
+            let leftSpeed = forward - turn;
+            let rightSpeed = forward + turn;
+            
+            // Ограничиваем диапазон [-255, 255]
+            leftSpeed = Math.max(-255, Math.min(255, leftSpeed));
+            rightSpeed = Math.max(-255, Math.min(255, rightSpeed));
+            
+            return { left: leftSpeed, right: rightSpeed };
         }
 
-        // === ОБРАБОТЧИК D-PAD КНОПОК ===
-        // Логика: "Ехать, пока держишь" (touchstart -> отправить команду, touchend -> стоп)
-
-        function setupDpadButton(button, direction) {
-            // Обработчик нажатия кнопки (touchstart / mousedown)
-            function handleStart(e) {
-                e.preventDefault();
-                button.classList.add('pressed');
-
-                // Определяем скорость на основе направления
-                const speed = robotState.speed;
-
-                if (direction === 'forward') {
-                    // Вперед: оба мотора вперед
-                    setMotorSpeeds(speed, speed);
-                } else if (direction === 'backward') {
-                    // Назад: оба мотора назад
-                    setMotorSpeeds(-speed, -speed);
-                } else if (direction === 'left') {
-                    // Влево (разворот на месте): левый мотор назад, правый вперед
-                    setMotorSpeeds(-speed, speed);
-                } else if (direction === 'right') {
-                    // Вправо (разворот на месте): левый мотор вперед, правый назад
-                    setMotorSpeeds(speed, -speed);
-                }
-
-                // Отправляем команду движения
-                throttleCommand(() => {
-                    sendCommand(robotState.speedLeft, robotState.speedRight);
-                });
+        // === ФУНКЦИЯ: Получение координат взаимодействия (touch/mouse) ===
+        function getJoystickCoordinates(e) {
+            const rect = canvas.getBoundingClientRect();
+            const centerX = CONFIG.canvasSize / 2;
+            const centerY = CONFIG.canvasSize / 2;
+            
+            let clientX, clientY;
+            
+            // Проверяем тип события (touch или mouse)
+            if (e.touches && e.touches.length > 0) {
+                // Touch event - берём первый палец
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            } else {
+                // Mouse event
+                clientX = e.clientX;
+                clientY = e.clientY;
             }
-
-            // Обработчик отпускания кнопки (touchend / mouseup)
-            function handleEnd(e) {
-                e.preventDefault();
-                button.classList.remove('pressed');
-
-                // Отправляем команду стопа (l=0, r=0)
-                setMotorSpeeds(0, 0);
-                throttleCommand(() => {
-                    sendCommand(0, 0);
-                });
-            }
-
-            // Регистрируем обработчики для мыши и сенсорных экранов
-            button.addEventListener('mousedown', handleStart);
-            button.addEventListener('mouseup', handleEnd);
-            button.addEventListener('mouseleave', handleEnd);
-            button.addEventListener('touchstart', handleStart);
-            button.addEventListener('touchend', handleEnd);
+            
+            // Нормализуем координаты относительно canvas с учётом DPI
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            
+            const x = (clientX - rect.left) * scaleX - centerX;
+            const y = (clientY - rect.top) * scaleY - centerY;
+            
+            return { x, y };
         }
 
-        // Инициализируем все D-pad кнопки
-        setupDpadButton(btnUp, 'forward');
-        setupDpadButton(btnDown, 'backward');
-        setupDpadButton(btnLeft, 'left');
-        setupDpadButton(btnRight, 'right');
+        // === ОБРАБОТЧИК: MOUSEDOWN / TOUCHSTART (начало взаимодействия) ===
+        canvas.addEventListener('mousedown', handleJoystickStart);
+        canvas.addEventListener('touchstart', handleJoystickStart, { passive: false });
 
-        // === КНОПКА СТОП ===
-        btnStop.addEventListener('click', () => {
-            // Отправляем команду полной остановки
-            setMotorSpeeds(0, 0);
-            sendCommand(0, 0);
-            console.log('Робот остановлен');
+        function handleJoystickStart(e) {
+            e.preventDefault();
+            joystickActive = true;
+            handleJoystickMove(e); // Сразу обновляем положение
+        }
+
+        // === ОБРАБОТЧИК: MOUSEMOVE / TOUCHMOVE (движение джойстика) ===
+        document.addEventListener('mousemove', handleJoystickMove);
+        document.addEventListener('touchmove', handleJoystickMove, { passive: false });
+
+        function handleJoystickMove(e) {
+            if (!joystickActive) return;
+            
+            e.preventDefault();
+            const { x, y } = getJoystickCoordinates(e);
+            
+            // Рисуем обновленное положение джойстика
+            const { thumbX, thumbY } = drawJoystick(x, y);
+            
+            // Преобразуем координаты в команды моторов
+            const motorCommand = joystickToMotorCommand(thumbX, thumbY);
+            
+            // Отправляем команду с throttle
+            sendCommand(motorCommand.left, motorCommand.right, currentServo);
+        }
+
+        // === ОБРАБОТЧИК: MOUSEUP / TOUCHEND (отпускание джойстика) ===
+        document.addEventListener('mouseup', handleJoystickEnd);
+        document.addEventListener('touchend', handleJoystickEnd, { passive: false });
+
+        function handleJoystickEnd(e) {
+            if (!joystickActive) return;
+            
+            e.preventDefault();
+            joystickActive = false;
+            
+            // Возвращаем джойстик в центр
+            drawJoystick(0, 0);
+            
+            // Отправляем команду стопа (l=0, r=0, сохраняем текущий угол серво)
+            sendCommand(0, 0, currentServo);
+        }
+
+        // === ОБРАБОТЧИК: КНОПКА АВАРИЙНОГО СТОПА ===
+        document.getElementById('emergencyStop').addEventListener('click', () => {
+            joystickActive = false;
+            drawJoystick(0, 0);
+            sendCommand(0, 0, currentServo);
+            statusText.textContent = '🛑 АВАРИЙНАЯ ОСТАНОВКА!';
         });
 
         // === ИНИЦИАЛИЗАЦИЯ ===
-        // При загрузке страницы устанавливаем начальное значение серво (90°)
+        // При загрузке страницы рисуем джойстик в нейтральном положении (центр)
         window.addEventListener('load', () => {
-            statusText.textContent = 'Готово к управлению';
-            // Отправляем начальную команду для инициализации
-            setTimeout(() => {
-                sendCommand(0, 0, robotState.servoAngle);
-            }, 500);
+            drawJoystick(0, 0);
+            statusIndicator.classList.add('online');
         });
     </script>
 </body>
