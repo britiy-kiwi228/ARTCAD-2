@@ -5,6 +5,7 @@
 #include <ESPAsyncWebServer.h> // библиотека для асинхронного сервера
 #include "motor_control.h" // для управления моторами
 #include "servo_control.h" // для управления сервоприводом
+#include "web_interface.h" // web-интерфейс управления роботом
 // Параметры сети
 #include "secrets.h"
 // объявления экстерных переменных 

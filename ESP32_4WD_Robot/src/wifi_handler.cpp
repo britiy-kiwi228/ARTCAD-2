@@ -15,6 +15,13 @@ void wifi_init() {
     Serial.print("IP Address: ");
     Serial.println(WiFi.softAPIP()); // Обычно это 192.168.4.1
 
+    // 2.1. Обработчик корневого пути "/" - возвращает HTML интерфейс
+    // Клиент получит красивый web-интерфейс при открытии IP адреса в браузере
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+        // Отправляем HTML страницу из PROGMEM с типом Content-Type: text/html
+        request->send_P(200, "text/html", index_html);
+    });
+
     // 2. Описываем логику обработки запроса "/move"
     // Это называется "Handler" или "Route"
     server.on("/move", HTTP_GET, [](AsyncWebServerRequest *request) {
