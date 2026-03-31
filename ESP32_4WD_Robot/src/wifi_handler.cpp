@@ -8,28 +8,67 @@ extern bool isFailsafeActive; // Флаг для отслеживания сос
 extern volatile uint32_t lastUpdateTime; // Время последней полученной команды
 
 void wifi_init() {
-    // 1. Запуск точки доступа (Access Point)
-    WiFi.softAP(AP_SSID, AP_PASS);
+    // ===== ИСПРАВЛЕНИЕ: Переключение с Access Point на режим клиента (STA) =====
+    // Вместо того чтобы создавать собственную WiFi сеть, ESP32 теперь подключается
+    // к домашней сети (hollow512) как обычный клиент.
+    // Преимущество: смартфон и робот находятся в одной сети, можно контролировать со смартфона
+    
+    Serial.println("\n===== WiFi Initialization =====");
+    Serial.println("Connecting to WiFi network: " + String(AP_SSID));
+    
+    // Устанавливаем режим STA (Station/Client) вместо AP (Access Point)
+    WiFi.mode(WIFI_STA);
+    
+    // Подключаемся к домашней WiFi сети с учеными данными из secrets.h
+    WiFi.begin(AP_SSID, AP_PASS);
+    
+    // Ждем подключения с таймаутом 20 секунд (40 попыток по 500 мс)
+    int attempts = 0;
+    constexpr int MAX_ATTEMPTS = 40;
+    
+    while (WiFi.status() != WL_CONNECTED && attempts < MAX_ATTEMPTS) {
+        delay(500);
+        Serial.print(".");
+        attempts++;
+    }
+    
+    Serial.println(); // Новая строка после точек прогресса
+    
+    // Проверяем результат подключения
+    if (WiFi.status() == WL_CONNECTED) {
+        Serial.println("✓ WiFi Connected Successfully!");
+        Serial.print("Local IP Address: ");
+        Serial.println(WiFi.localIP());  // Выводим реальный IP из маршрутизатора
+        Serial.print("Gateway: ");
+        Serial.println(WiFi.gatewayIP());
+    } else {
+        Serial.println("✗ WiFi Connection Failed!");
+        Serial.println("Please check SSID and password in secrets.h");
+        Serial.println("Continuing without WiFi...");
+    }
 
-    Serial.println("Wi-Fi AP Started");
-    Serial.print("IP Address: ");
-    Serial.println(WiFi.softAPIP()); // Обычно это 192.168.4.1
-
-    // 2.1. Обработчик корневого пути "/" - возвращает HTML интерфейс
-    // Клиент получит красивый web-интерфейс при открытии IP адреса в браузере
+    // ===== ВЕХОВОЕ МЕНЮ ВЕБА: Endpoints (маршруты) =====
+    
+    // 1. Обработчик корневого пути "/" - возвращает HTML интерфейс
+    // Когда ты заходишь на http://[IP_РОБОТА]/ в браузер смартфона
+    // Клиент получит красивую HTML страницу управления роботом
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
         // Отправляем HTML страницу из PROGMEM с типом Content-Type: text/html
         request->send_P(200, "text/html", index_html);
     });
 
-    // 2. Описываем логику обработки запроса "/move"
-    // Это называется "Handler" или "Route"
+    // 2. Endpoint "/move" - команда управления моторами и сервом
+    // Пример запроса: http://192.168.X.X/move?l=200&r=150&s=90
+    // l - скорость левого мотора (-255...255)
+    // r - скорость правого мотора (-255...255)
+    // s - угол сервопривода оружия (0...180)
     server.on("/move", HTTP_GET, [](AsyncWebServerRequest *request) {
-        isFailsafeActive = false; // Получили команду - отключаем Failsafe
+        // Получена команда - сбрасываем флаг Failsafe (робот на связи!)
+        isFailsafeActive = false;
         lastUpdateTime = millis(); // Обновляем время последней команды
-        // Проверяем, прислал ли телефон параметры 'l' и 'r'
+        
+        // Проверяем, прислал ли смартфон параметры 'l' и 'r' (скорости моторов)
         if (request->hasParam("l") && request->hasParam("r")) {
-            
             // Извлекаем значения из запроса и переводим из текста (String) в целое число (int)
             int valL = request->getParam("l")->value().toInt();
             int valR = request->getParam("r")->value().toInt();
@@ -42,7 +81,7 @@ void wifi_init() {
             }
         }
 
-        // Если прислали параметр 's' (servo)
+        // Если прислали параметр 's' (servo angle - угол сервопривода)
         if (request->hasParam("s")) {
             int valS = request->getParam("s")->value().toInt();
             // Валидация параметра: угол должен быть в диапазоне 0-180 градусов
@@ -51,32 +90,34 @@ void wifi_init() {
             }
         }
 
-        // Отправляем ответ телефону, что всё ок (код 200)
+        // Отправляем ответ смартфону, что всё ОК (код HTTP 200)
         request->send(200, "text/plain", "OK");
     });
 
-    // 3. Обработчик для получения расстояния от ультразвукового датчика
-    // Клиент может сделать запрос http://192.168.4.1/distance
-    // и получит JSON с текущим расстоянием в сантиметрах
+    // 3. Endpoint "/distance" - получить текущее расстояние от датчика
+    // Пример: GET http://192.168.X.X/distance
+    // Ответ: {"distance": 45.3, "status": "ok"} или {"distance": -1.0, "status": "timeout"}
     server.on("/distance", HTTP_GET, [](AsyncWebServerRequest *request) {
+        // Получаем текущее расстояние из ультразвукового датчика
         float distance = ultrasonic_get_distance_cm(&distanceSensor);
         
-        // Формируем JSON ответ
-        // Пример ответа: {"distance": 45.3, "status": "ok"}
-        //           или  {"distance": -1.0, "status": "timeout"}
+        // Формируем JSON ответ вручную (без внешних библиотек)
         String response = "{\"distance\": ";
         response += distance;
         
+        // Добавляем статус: OK или TIMEOUT
         if (distance < 0) {
             response += ", \"status\": \"timeout\"}";
         } else {
             response += ", \"status\": \"ok\"}";
         }
         
-        // Отправляем JSON ответ с типом Content-Type: application/json
+        // Отправляем JSON ответ с корректным типом Content-Type
         request->send(200, "application/json", response);
     });
 
-    // 4. Запуск сервера
+    // 4. Запуск асинхронного веб-сервера на порту 80
+    // Сервер будет слушать входящие HTTP запросы
+    // Это не блокирует выполнение loop() - работает асинхронно!
     server.begin();
 }
