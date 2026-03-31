@@ -90,9 +90,10 @@ void checkFailsafe() {
     // Используем безопасное сравнение для защиты от переполнения millis()
     uint32_t timeSinceLastCommand = (uint32_t)(currentTime - lastUpdateTime);
     
-    // Уменьшили до 750 мс (вместо 500) чтобы избежать ложных срабатываний
-    // при быстрых последовательных команд от веб-интерфейса
-    const uint32_t FAILSAFE_TIMEOUT = 750;  // миллисекунды
+    // УВЕЛИЧИЛИ до 1000 мс (вместо 750 мс) для дополнительной подстраховки
+    // Heartbeat отправляется каждые 100мс из браузера, поэтому даже при throttle
+    // таймер будет обновляться минимум каждые 100мс
+    const uint32_t FAILSAFE_TIMEOUT = 1000;  // миллисекунды
     
     if (timeSinceLastCommand > FAILSAFE_TIMEOUT && !isFailsafeActive) {
         // ===== FAILSAFE АКТИВИРОВАЛСЯ =====

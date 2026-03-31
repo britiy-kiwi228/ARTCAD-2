@@ -290,6 +290,18 @@ const char index_html[] PROGMEM = R"rawliteral(
     </div>
 
     <script>
+        // === ФУНКЦИЯ: Heartbeat - регулярно обновляет таймер failsafe на сервере ===
+        // Отправляется НЕЗАВИСИМО от команд управления
+        // Это гарантирует, что failsafe не сработает при throttle (задержке команд)
+        async function sendHeartbeat() {
+            try {
+                await fetch('/heartbeat');
+                // Успешно отправили heartbeat - failsafe получил сигнал жизни
+            } catch (error) {
+                // Ошибка соединения - это нормально, failsafe справится с таймаутом
+            }
+        }
+
         // === ФУНКЦИЯ: Обновление расстояния от датчика США (НОВОЕ) ===
         async function updateDistance() {
             try {
@@ -589,6 +601,13 @@ const char index_html[] PROGMEM = R"rawliteral(
             
             // Затем обновляем каждые 100 миллисекунд
             setInterval(updateDistance, 100);
+            
+            // === HEARTBEAT ДЛЯ FAILSAFE ===
+            // Отправляем пустой heartbeat запрос каждые 100мс
+            // Это гарантирует, что failsafe на сервере не сработает
+            // даже если команды ставятся в очередь (throttle)
+            sendHeartbeat();  // Первый heartbeat сразу
+            setInterval(sendHeartbeat, 100);  // Затем каждые 100мс
         });
     </script>
 </body>

@@ -115,7 +115,21 @@ void wifi_init() {
         request->send(200, "text/plain", "OK");
     });
 
-    // 3. Endpoint "/distance" - получить текущее расстояние от датчика
+    // 3. Endpoint "/heartbeat" - пустой запрос для обновления таймера failsafe
+    // Отправляется каждые 100мс из JavaScript, чтобы failsafe не срабатывал
+    // Это критично когда команды ставятся в очередь (throttle) и не отправляются
+    server.on("/heartbeat", HTTP_GET, [](AsyncWebServerRequest *request) {
+        // Просто обновляем время последней команды
+        portDISABLE_INTERRUPTS();
+        lastUpdateTime = millis();
+        isFailsafeActive = false;
+        portENABLE_INTERRUPTS();
+        
+        // Отправляем простой ответ ОК
+        request->send(200, "text/plain", "OK");
+    });
+
+    // 4. Endpoint "/distance" - получить текущее расстояние от датчика
     // Пример: GET http://192.168.X.X/distance
     // Ответ: {"distance": 45.3, "status": "ok"} или {"distance": -1.0, "status": "timeout"}
     server.on("/distance", HTTP_GET, [](AsyncWebServerRequest *request) {
