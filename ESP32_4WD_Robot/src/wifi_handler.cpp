@@ -80,9 +80,13 @@ void wifi_init() {
     // r - скорость правого мотора (-255...255)
     // s - угол сервопривода оружия (0...180)
     server.on("/move", HTTP_GET, [](AsyncWebServerRequest *request) {
-        // Получена команда - сбрасываем флаг Failsafe (робот на связи!)
-        isFailsafeActive = false;
-        lastUpdateTime = millis(); // Обновляем время последней команды
+        // ===== КРИТИЧНО: Обновляем lastUpdateTime В ПЕРВУЮ ОЧЕРЕДЬ =====
+        // Это должно быть ПЕРВОЕ действие при получении команды!
+        // Защищаем от race condition отключением прерываний
+        portDISABLE_INTERRUPTS();
+        lastUpdateTime = millis();
+        isFailsafeActive = false;  // Сбрасываем флаг Failsafe (робот на связи!)
+        portENABLE_INTERRUPTS();
         
         // Проверяем, прислал ли смартфон параметры 'l' и 'r' (скорости моторов)
         if (request->hasParam("l") && request->hasParam("r")) {

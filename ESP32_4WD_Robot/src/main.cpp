@@ -15,6 +15,7 @@ Ultrasonic_t distanceSensor; // Датчик ультразвукового ра
 volatile uint32_t lastUpdateTime = 0; // Время последней полученной команды (для Failsafe)
 bool isFailsafeActive = false; // Флаг для отслеживания состояния Failsafe
 volatile uint32_t lastUltrasonicTime = 0; // Время последнего измерения расстояния (для таймера 100 мс)
+volatile uint32_t setupCompleteTime = 0; // Время завершения инициализации (для grace period failsafe)
 typedef enum{
     STATE_IDLE, // Робот стоит на месте
     STATE_DRIVING, // Робот движется
@@ -54,26 +55,71 @@ void setup() {
     
     lastUpdateTime = millis(); // Инициализируем время последней команды
     lastUltrasonicTime = millis(); // Инициализируем таймер для ультразвукового датчика
+    
+    // ===== ИСПРАВЛЕНИЕ: Grace period для Failsafe =====
+    // Даем 3 секунды на полную инициализацию WiFi и веб-сервера
+    // Без этого failsafe может срабатуть до того, как первая команда придет
+    setupCompleteTime = millis();
+    Serial.println("\n[FAILSAFE] Grace period: 3 seconds for WiFi initialization...\n");
 }
 
 
 /**
- * Функция проверки безопасности.
+ * Функция проверки безопасности (FAILSAFE).
  * Если связь потеряна (команд нет > 500 мс), останавливаем моторы.
+ * 
+ * ИСПРАВЛЕНИЯ:
+ *   - Grace period (3 секунды после старта): failsafe не проверяется, пока WiFi инициализируется
+ *   - Увеличен таймаут до 750 мс (вместо 500 мс) чтобы избежать ложных срабатываний
+ *   - Добавлена отладка для диагностики проблем
  */
 void checkFailsafe() {
-    uint32_t currentTime = millis(); // Берем текущее время
+    uint32_t currentTime = millis();
     
+    // ===== GRACE PERIOD: Первые 3 секунды после инициализации =====
+    // Во время инициализации WiFi и веб-сервера могут быть задержки
+    // Не проверяем failsafe, пока это не завершится
+    uint32_t timeSinceSetup = currentTime - setupCompleteTime;
+    if (timeSinceSetup < 3000) {
+        // Еще в grace period - не проверяем failsafe
+        return;
+    }
+    
+    // === ОСНОВНАЯ ПРОВЕРКА FAILSAFE ===
     // Проверяем разницу между "сейчас" и "последней командой"
     // Используем безопасное сравнение для защиты от переполнения millis()
-    if ((uint32_t)(currentTime - lastUpdateTime) > 500 && !isFailsafeActive) {
+    uint32_t timeSinceLastCommand = (uint32_t)(currentTime - lastUpdateTime);
+    
+    // Уменьшили до 750 мс (вместо 500) чтобы избежать ложных срабатываний
+    // при быстрых последовательных команд от веб-интерфейса
+    const uint32_t FAILSAFE_TIMEOUT = 750;  // миллисекунды
+    
+    if (timeSinceLastCommand > FAILSAFE_TIMEOUT && !isFailsafeActive) {
+        // ===== FAILSAFE АКТИВИРОВАЛСЯ =====
         isFailsafeActive = true;
-        currentState = STATE_EMERGENCY; // Переходим в аварийное состояние
-        // Вызываем нашу функцию со скоростью 0
+        currentState = STATE_EMERGENCY;
+        
+        // Останавливаем моторы немедленно
         motor_set_speed(&motorL, 0);
         motor_set_speed(&motorR, 0);
-        Serial.println("Failsafe activated: Motors stopped due to lost connection."); //вывод в консоль 
-
+        
+        // Отладочный вывод
+        Serial.println("\n" + String(50, '='));
+        Serial.println("⚠️  FAILSAFE ACTIVATED!");
+        Serial.print("Current time: ");
+        Serial.println(currentTime);
+        Serial.print("Last command time: ");
+        Serial.println(lastUpdateTime);
+        Serial.print("Time since last command: ");
+        Serial.print(timeSinceLastCommand);
+        Serial.println(" ms");
+        Serial.println("Motors stopped due to lost connection.");
+        Serial.println(String(50, '=') + "\n");
+    } else if (isFailsafeActive && timeSinceLastCommand <= FAILSAFE_TIMEOUT) {
+        // ===== FAILSAFE ДЕАКТИВИРОВАЛСЯ (восстановлена связь) =====
+        isFailsafeActive = false;
+        currentState = STATE_IDLE;
+        Serial.println("[FAILSAFE] ✓ Connection restored! Failsafe deactivated.\n");
     }
 }
 
