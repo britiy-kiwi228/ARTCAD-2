@@ -53,33 +53,29 @@ void setup() {
     // Для отладки откроем последовательный порт (монитор порта)
     Serial.println("Robot 4WD Initialized!");
     
-    lastUpdateTime = millis(); // Инициализируем время последней команды
-    lastUltrasonicTime = millis(); // Инициализируем таймер для ультразвукового датчика
+    // ===== ИСПРАВЛЕНИЕ: Инициализация ПОСЛЕДНИЙ в setup() =====
+    // Это гарантирует что все системы (WiFi, сервер) уже запущены
+    // и heartbeat может отправляться БЕЗ race condition с инициализацией
+    delay(100);  // Даем время на стабилизацию
     
-    // ===== ИСПРАВЛЕНИЕ: Grace period для Failsafe =====
-    // Даем 3 секунды на полную инициализацию WiFi и веб-сервера
-    // Без этого failsafe может срабатуть до того, как первая команда придет
-    setupCompleteTime = millis();
+    lastUltrasonicTime = millis();  // Таймер ультразвукового датчика
+    lastUpdateTime = millis();      // Время последней команды (inits heartbeat)
+    setupCompleteTime = millis();   // Время завершения инициализации
+    
     Serial.println("\n[FAILSAFE] Grace period: 3 seconds for WiFi initialization...\n");
 }
 
 
-/**
- * Функция проверки безопасности (FAILSAFE).
- * Если связь потеряна (команд нет > 500 мс), останавливаем моторы.
- * 
- * ИСПРАВЛЕНИЯ:
- *   - Grace period (3 секунды после старта): failsafe не проверяется, пока WiFi инициализируется
- *   - Увеличен таймаут до 750 мс (вместо 500 мс) чтобы избежать ложных срабатываний
- *   - Добавлена отладка для диагностики проблем
- */
 void checkFailsafe() {
     uint32_t currentTime = millis();
     
     // ===== GRACE PERIOD: Первые 3 секунды после инициализации =====
     // Во время инициализации WiFi и веб-сервера могут быть задержки
     // Не проверяем failsafe, пока это не завершится
-    uint32_t timeSinceSetup = currentTime - setupCompleteTime;
+    // 
+    // ВАЖНО: Используем (int32_t) приведение для правильной обработки переполнения
+    // 32-битных беззнаковых чисел. Это работает корректно даже если millis() перевернулась.
+    int32_t timeSinceSetup = (int32_t)(currentTime - setupCompleteTime);
     if (timeSinceSetup < 3000) {
         // Еще в grace period - не проверяем failsafe
         return;
@@ -87,13 +83,13 @@ void checkFailsafe() {
     
     // === ОСНОВНАЯ ПРОВЕРКА FAILSAFE ===
     // Проверяем разницу между "сейчас" и "последней командой"
-    // Используем безопасное сравнение для защиты от переполнения millis()
-    uint32_t timeSinceLastCommand = (uint32_t)(currentTime - lastUpdateTime);
+    // Используем (int32_t) приведение для безопасного сравнения
+    int32_t timeSinceLastCommand = (int32_t)(currentTime - lastUpdateTime);
     
     // УВЕЛИЧИЛИ до 1000 мс (вместо 750 мс) для дополнительной подстраховки
     // Heartbeat отправляется каждые 100мс из браузера, поэтому даже при throttle
     // таймер будет обновляться минимум каждые 100мс
-    const uint32_t FAILSAFE_TIMEOUT = 1000;  // миллисекунды
+    const int32_t FAILSAFE_TIMEOUT = 1000;  // миллисекунды
     
     if (timeSinceLastCommand > FAILSAFE_TIMEOUT && !isFailsafeActive) {
         // ===== FAILSAFE АКТИВИРОВАЛСЯ =====
