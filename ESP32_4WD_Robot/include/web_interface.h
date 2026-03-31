@@ -49,6 +49,44 @@ const char index_html[] PROGMEM = R"rawliteral(
             text-shadow: 0 0 10px rgba(77, 174, 255, 0.3);
         }
 
+        /* === ДИСПЛЕЙ РАССТОЯНИЯ (НОВОЕ) === */
+        .distance-display {
+            background: rgba(77, 174, 255, 0.1);
+            border: 2px solid rgba(77, 174, 255, 0.5);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 25px;
+            text-align: center;
+        }
+
+        .distance-label {
+            font-size: 14px;
+            color: #a0a0a0;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .distance-value {
+            font-size: 48px;
+            font-weight: bold;
+            color: #00ff00;
+            text-shadow: 0 0 15px rgba(0, 255, 0, 0.6);
+            line-height: 1;
+        }
+
+        .distance-unit {
+            font-size: 16px;
+            color: #a0a0a0;
+            margin-left: 8px;
+        }
+
+        .distance-status {
+            font-size: 12px;
+            color: #666;
+            margin-top: 8px;
+        }
+
         /* === КОНТРОЛЬ СКОРОСТИ === */
         .speed-control {
             margin-bottom: 25px;
@@ -202,6 +240,16 @@ const char index_html[] PROGMEM = R"rawliteral(
     <div class="container">
         <h1>🤖 4WD Robot Control</h1>
 
+        <!-- ДИСПЛЕЙ РАССТОЯНИЯ -->
+        <div class="distance-display">
+            <div class="distance-label">📏 Расстояние до стены</div>
+            <div>
+                <span class="distance-value" id="distanceValue">---</span>
+                <span class="distance-unit" id="distanceUnit">см</span>
+            </div>
+            <div class="distance-status" id="distanceStatus">загрузка...</div>
+        </div>
+
         <!-- Контроль скорости -->
         <div class="speed-control">
             <div class="slider-label">
@@ -242,6 +290,36 @@ const char index_html[] PROGMEM = R"rawliteral(
     </div>
 
     <script>
+        // === ФУНКЦИЯ: Обновление расстояния от датчика США (НОВОЕ) ===
+        async function updateDistance() {
+            try {
+                const response = await fetch('/distance');
+                if (response.ok) {
+                    const data = await response.json();
+                    const distanceElement = document.getElementById('distanceValue');
+                    const statusElement = document.getElementById('distanceStatus');
+                    
+                    if (data.distance < 0) {
+                        // Таймаут или ошибка датчика
+                        distanceElement.textContent = '---';
+                        distanceElement.style.color = '#ff6666';
+                        statusElement.textContent = '❌ Датчик не отвечает';
+                        statusElement.style.color = '#ff6666';
+                    } else {
+                        // Нормальное значение
+                        distanceElement.textContent = data.distance.toFixed(1);
+                        distanceElement.style.color = '#00ff00';
+                        statusElement.textContent = '✓ Обновлено сейчас';
+                        statusElement.style.color = '#66ff66';
+                    }
+                }
+            } catch (error) {
+                document.getElementById('distanceValue').textContent = '---';
+                document.getElementById('distanceStatus').textContent = '❌ Нет соединения';
+                document.getElementById('distanceStatus').style.color = '#ff6666';
+            }
+        }
+
         // === КОНФИГУРАЦИЯ ===
         const CONFIG = {
             throttleMs: 50,      // Минимальный интервал между командами (50мс = 20 команд/сек)
@@ -504,6 +582,13 @@ const char index_html[] PROGMEM = R"rawliteral(
         window.addEventListener('load', () => {
             drawJoystick(0, 0);
             statusIndicator.classList.add('online');
+            
+            // === АВТООБНОВЛЕНИЕ РАССТОЯНИЯ КАЖДЫЕ 100 МС ===
+            // Запускаем первое обновление сразу
+            updateDistance();
+            
+            // Затем обновляем каждые 100 миллисекунд
+            setInterval(updateDistance, 100);
         });
     </script>
 </body>

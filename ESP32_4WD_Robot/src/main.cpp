@@ -83,21 +83,18 @@ void loop() {
     // ===== НЕБЛОКИРУЮЩИЙ ТАЙМЕР ДЛЯ УЛЬТРАЗВУКОВОГО ДАТЧИКА =====
     // Запускаем новое измерение расстояния каждые 100 миллисекунд
     // Это дает нам частоту измерения ~10 раз в секунду
+    // Результаты отправляются на веб-страницу через API /distance
     uint32_t currentTime = millis();
     if ((uint32_t)(currentTime - lastUltrasonicTime) >= 100) {
         // Прошло 100 мс или больше - пора запустить новое измерение
         ultrasonic_start_measurement(&distanceSensor);
         lastUltrasonicTime = currentTime;
         
-        // Получить результат последнего завершенного измерения и вывести в Serial Monitor
+        // Получить результат последнего завершенного измерения
+        // НЕ выводим в Serial Monitor - только отправляем в браузер
         float distance = ultrasonic_get_distance_cm(&distanceSensor);
-        if (distance >= 0) {
-            Serial.print("Distance: ");
-            Serial.print(distance);
-            Serial.println(" cm");
-        } else {
-            Serial.println("Distance: TIMEOUT (no signal)");
-        }
+        // Данные автоматически доступны через API /distance для веб-интерфейса
+        (void)distance; // Убираем warning о неиспользованной переменной
     }
     
     switch (currentState) {

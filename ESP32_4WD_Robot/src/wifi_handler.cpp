@@ -36,15 +36,32 @@ void wifi_init() {
     
     // Проверяем результат подключения
     if (WiFi.status() == WL_CONNECTED) {
+        Serial.println("\n█████████████████████████████████████████");
         Serial.println("✓ WiFi Connected Successfully!");
-        Serial.print("Local IP Address: ");
-        Serial.println(WiFi.localIP());  // Выводим реальный IP из маршрутизатора
-        Serial.print("Gateway: ");
+        Serial.println("█████████████████████████████████████████");
+        
+        IPAddress localIP = WiFi.localIP();
+        Serial.println("\n>>> ROBOT IP ADDRESS <<<");
+        Serial.print("    http://");
+        Serial.print(localIP);
+        Serial.println("/");
+        Serial.println("\nOpen this in your browser on smartphone:");
+        Serial.print("    http://");
+        Serial.print(localIP);
+        Serial.println("/distance");
+        
+        Serial.println("\nNetwork Details:");
+        Serial.print("  Local IP:  ");
+        Serial.println(localIP);
+        Serial.print("  Gateway:   ");
         Serial.println(WiFi.gatewayIP());
+        Serial.print("  MAC:       ");
+        Serial.println(WiFi.macAddress());
+        Serial.println("█████████████████████████████████████████\n");
     } else {
-        Serial.println("✗ WiFi Connection Failed!");
+        Serial.println("\n✗ WiFi Connection Failed!");
         Serial.println("Please check SSID and password in secrets.h");
-        Serial.println("Continuing without WiFi...");
+        Serial.println("Continuing without WiFi...\n");
     }
 
     // ===== ВЕХОВОЕ МЕНЮ ВЕБА: Endpoints (маршруты) =====
