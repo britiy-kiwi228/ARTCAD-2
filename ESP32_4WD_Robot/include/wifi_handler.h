@@ -5,6 +5,7 @@
 #include <ESPAsyncWebServer.h> // библиотека для асинхронного сервера
 #include "motor_control.h" // для управления моторами
 #include "servo_control.h" // для управления сервоприводом
+#include "ultrasonic.h" // для датчика расстояния
 #include "web_interface.h" // web-интерфейс управления роботом
 // Параметры сети
 #include "secrets.h"
@@ -12,6 +13,7 @@
 extern Motor_t motorL;
 extern Motor_t motorR;
 extern Servo_t servoWeapon;
+extern Ultrasonic_t distanceSensor;
 extern volatile uint32_t lastUpdateTime;
 extern bool isFailsafeActive;
 

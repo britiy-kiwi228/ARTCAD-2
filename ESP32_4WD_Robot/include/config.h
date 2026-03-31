@@ -27,4 +27,8 @@
 #define LEDC_CH_R 1
 #define LEDC_CH_SERVO 4  // Используем Timer 1 (избегаем конфликта с моторами на Timer 0)
 
+// --- Пины для ультразвукового датчика HC-SR04 ---
+#define ULTRA_TRIG 5   // Пин TRIGGER (запуск импульса)
+#define ULTRA_ECHO 18  // Пин ECHO (прием сигнала, через делитель напряжения 5V → 3.3V)
+
 #endif

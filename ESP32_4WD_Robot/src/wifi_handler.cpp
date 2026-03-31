@@ -55,6 +55,28 @@ void wifi_init() {
         request->send(200, "text/plain", "OK");
     });
 
-    // 3. Запуск сервера
+    // 3. Обработчик для получения расстояния от ультразвукового датчика
+    // Клиент может сделать запрос http://192.168.4.1/distance
+    // и получит JSON с текущим расстоянием в сантиметрах
+    server.on("/distance", HTTP_GET, [](AsyncWebServerRequest *request) {
+        float distance = ultrasonic_get_distance_cm(&distanceSensor);
+        
+        // Формируем JSON ответ
+        // Пример ответа: {"distance": 45.3, "status": "ok"}
+        //           или  {"distance": -1.0, "status": "timeout"}
+        String response = "{\"distance\": ";
+        response += distance;
+        
+        if (distance < 0) {
+            response += ", \"status\": \"timeout\"}";
+        } else {
+            response += ", \"status\": \"ok\"}";
+        }
+        
+        // Отправляем JSON ответ с типом Content-Type: application/json
+        request->send(200, "application/json", response);
+    });
+
+    // 4. Запуск сервера
     server.begin();
 }
