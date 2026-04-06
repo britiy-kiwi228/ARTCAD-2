@@ -1,137 +1,99 @@
-#ifndef WEAPON_SYSTEM_H // Защита от повторного включения
+#ifndef WEAPON_SYSTEM_H
 #define WEAPON_SYSTEM_H
 
-#include "config.h"    // Включаем конфигурационный файл для доступа к пинам и параметрам
-#include <stdint.h>    // Типы данных (uint8_t, uint32_t)
-#include <stdbool.h>   // Булевы типы (true/false)
+#include "config.h"
+#include <stdint.h>
+#include <stdbool.h>
+
+// Safety parameters for TC1508 motor driver
+#define WEAPON_MAX_PWM 200
+#define WEAPON_MOTOR_LOAD_THRESHOLD 50
+#define WEAPON_SOFT_START_TIME_MS 100
 
 /**
- * Структура для управления двигателем системы вооружения (катапульта).
- * Инкапсулирует все параметры и состояние двигателя TC1508.
+ * Weapon motor control structure.
+ * Encapsulates motor parameters and state for TC1508 driver control.
  */
 typedef struct {
-    uint8_t ina_pin;           // Пин управления направлением A (GPIO 21)
-    uint8_t inb_pin;           // Пин управления направлением B (GPIO 19)
-    uint8_t pwm_pin;           // Пин ШИМ (GPIO 4)
-    uint8_t ledc_channel;      // Канал ШИМ (LEDC_CH_WEAPON = 5)
+    uint8_t ina_pin;
+    uint8_t inb_pin;
+    uint8_t pwm_pin;
+    uint8_t ledc_channel;
     
-    // Параметры двигателя и его состояния
-    float motor_rpm;           // Обороты в минуту (399 RPM)
-    float gear_ratio;          // Передаточное число
+    float motor_rpm;
+    float gear_ratio;
     
-    // Переменные состояния для неблокирующего управления
-    int current_speed;         // Текущая установленная скорость (-255 до 255)
-    uint32_t rotation_start_ms; // Время начала вращения (milli-секунды)
-    float target_time_ms;      // Целевое время вращения для достижения угла (мс)
-    bool is_rotating;          // Флаг: выполняется ли вращение на угол
-    
-} WeaponMotor_t;
-
-#ifndef WEAPON_SYSTEM_H // Защита от повторного включения
-#define WEAPON_SYSTEM_H
-
-#include "config.h"    // Включаем конфигурационный файл для доступа к пинам и параметрам
-#include <stdint.h>    // Типы данных (uint8_t, uint32_t)
-#include <stdbool.h>   // Булевы типы (true/false)
-
-// === ПАРАМЕТРЫ ЗАЩИТЫ TC1508 ===
-#define WEAPON_MAX_PWM 200          // Максимальное ШИМ значение (вместо 255) - защита от перегрева
-                                     // ~78% = 12.6В * 0.78 = 9.8В (ниже порога перегрева TC1508)
-#define WEAPON_MOTOR_LOAD_THRESHOLD 50  // % загрузки ходовых моторов, выше которого блокируем катапульту
-#define WEAPON_SOFT_START_TIME_MS 100   // Время плавного разгона катапульты
-
-/**
- * Структура для управления двигателем системы вооружения (катапульта).
- * Инкапсулирует все параметры и состояние двигателя TC1508.
- */
-typedef struct {
-    uint8_t ina_pin;           // Пин управления направлением A (GPIO 21)
-    uint8_t inb_pin;           // Пин управления направлением B (GPIO 19)
-    uint8_t pwm_pin;           // Пин ШИМ (GPIO 4)
-    uint8_t ledc_channel;      // Канал ШИМ (LEDC_CH_WEAPON = 5)
-    
-    // Параметры двигателя и его состояния
-    float motor_rpm;           // Обороты в минуту (399 RPM)
-    float gear_ratio;          // Передаточное число
-    
-    // Переменные состояния для неблокирующего управления
-    int current_speed;         // Текущая установленная скорость (-255 до 255)
-    int current_pwm;           // Текущий ШИМ (может быть ограничен WEAPON_MAX_PWM)
-    uint32_t rotation_start_ms; // Время начала вращения (milli-секунды)
-    float target_time_ms;      // Целевое время вращения для достижения угла (мс)
-    bool is_rotating;          // Флаг: выполняется ли вращение на угол
+    int current_speed;
+    int current_pwm;
+    uint32_t rotation_start_ms;
+    float target_time_ms;
+    bool is_rotating;
     
 } WeaponMotor_t;
 
 /**
- * Инициализация системы вооружения.
- * Настраивает пины GPIO, каналы ШИМ (LEDC) и приводит двигатель в состояние покоя.
+ * Initialize weapon system.
+ * Configures GPIO pins, LEDC PWM channels, and brings motor to rest state.
  * 
- * @param weapon Указатель на структуру WeaponMotor_t
+ * @param weapon Pointer to WeaponMotor_t structure
  */
 void weapon_init(WeaponMotor_t* weapon);
 
 /**
- * Установка скорости двигателя системы вооружения С ЗАЩИТОЙ от перегрева.
+ * Set motor speed with thermal protection.
  * 
- * @param weapon Указатель на структуру WeaponMotor_t
- * @param speed Скорость от -255 (максимум в обратном направлении) 
- *              до 255 (максимум в прямом направлении)
- *              0 - полная остановка
+ * @param weapon Pointer to WeaponMotor_t structure
+ * @param speed Speed from -255 (max reverse) to 255 (max forward), 0 = stop
  * 
- * ЗАЩИТА: ШИМ-значение ограничено WEAPON_MAX_PWM (~200), чтобы не перегреть TC1508
+ * SAFETY: PWM limited to WEAPON_MAX_PWM to prevent TC1508 thermal shutdown
  */
 void weapon_set_speed(WeaponMotor_t* weapon, int speed);
 
 /**
- * Остановка двигателя (скорость = 0).
+ * Safe motor stop (speed = 0).
  * 
- * @param weapon Указатель на структуру WeaponMotor_t
+ * @param weapon Pointer to WeaponMotor_t structure
  */
 void weapon_stop(WeaponMotor_t* weapon);
 
 /**
- * Инициирование вращения двигателя на заранее рассчитанный угол.
- * С ЗАЩИТОЙ: проверяет нагрузку на ходовые моторы.
- * Если нагрузка ходовых моторов > WEAPON_MOTOR_LOAD_THRESHOLD → возвращает false
+ * Initiate rotation to target angle WITH load protection.
  * 
- * @param weapon Указатель на структуру WeaponMotor_t
- * @param target_angle Целевой угол поворота в градусах (0-360)
- * @param speed Скорость вращения (-255 до 255)
- * @param motor_left_load Текущая нагрузка левого мотора (0-100%)
- * @param motor_right_load Текущая нагрузка правого мотора (0-100%)
- * @return true если вращение успешно инициировано, false если заблокировано протекцией
+ * SAFETY: Checks drive motor loads.
+ * If load > WEAPON_MOTOR_LOAD_THRESHOLD -> blocks fire
+ * 
+ * @param weapon Pointer to WeaponMotor_t structure
+ * @param target_angle Target rotation angle (0-360 degrees)
+ * @param speed Motor speed (0-255)
+ * @param motor_left_load Drive motor left load percentage (0-100)
+ * @param motor_right_load Drive motor right load percentage (0-100)
+ * @return true if fire initiated, false if blocked by protection
  */
 bool weapon_rotate_to_angle(WeaponMotor_t* weapon, float target_angle, int speed, 
                             uint8_t motor_left_load, uint8_t motor_right_load);
 
 /**
- * Обновление состояния вращения на угол.
- * Должна вызываться в основном цикле для отслеживания завершения вращения.
+ * Update rotation state - call regularly in main loop().
  * 
- * ВАЖНО: Если функция вернёт true, двигатель будет остановлен автоматически.
- * 
- * @param weapon Указатель на структуру WeaponMotor_t
- * @return true если вращение завершено, false если ещё выполняется
+ * @param weapon Pointer to WeaponMotor_t structure
+ * @return true if rotation completed, false if still rotating
  */
 bool weapon_update_rotation(WeaponMotor_t* weapon);
 
 /**
- * Получить текущее состояние вращения.
+ * Get current rotation state.
  * 
- * @param weapon Указатель на структуру WeaponMotor_t
- * @return true если двигатель в процессе вращения на угол, false иначе
+ * @param weapon Pointer to WeaponMotor_t structure
+ * @return true if motor is rotating to angle, false otherwise
  */
 bool weapon_is_rotating(WeaponMotor_t* weapon);
 
 /**
- * Получить текущий ШИМ (после ограничений защиты).
+ * Get current PWM value (after safety limits).
  * 
- * @param weapon Указатель на структуру WeaponMotor_t
- * @return Текущое ШИМ значение (0-WEAPON_MAX_PWM)
+ * @param weapon Pointer to WeaponMotor_t structure
+ * @return Current PWM value (0 to WEAPON_MAX_PWM)
  */
 int weapon_get_current_pwm(WeaponMotor_t* weapon);
 
-#endif // конец WEAPON_SYSTEM_H
-
-#endif // конец WEAPON_SYSTEM_H
+#endif

@@ -1,24 +1,22 @@
 #include "weapon_system.h"
-#include <Arduino.h>           // Базовые функции Arduino (pinMode, digitalWrite, millis)
-#include <driver/ledc.h>       // Драйвер LEDC для ШИМ
-#include <stdlib.h>            // Функция abs() для работы с модулем число
-
+#include <Arduino.h>
+#include <driver/ledc.h>
+#include <stdlib.h>
 /**
- * Инициализация системы вооружения (драйвер TC1508 + двигатель).
+ * Initialize weapon system (TC1508 driver + motor).
  * 
- * Этапы:
- * 1. Сохранение параметров двигателя в структуру
- * 2. Настройка пинов направления как выходы (INA, INB)
- * 3. Настройка канала ШИМ (LEDC) для PWM пина
- * 4. Приведение двигателя в состояние покоя
+ * Steps:
+ * 1. Save motor parameters to structure
+ * 2. Configure direction pins as outputs (INA, INB)
+ * 3. Configure PWM channel (LEDC) for speed control
+ * 4. Bring motor to rest state
  */
 void weapon_init(WeaponMotor_t* weapon) {
-    // Шаг 1: Убедимся, что структура инициализирована корректно
     if (!weapon) {
         return;
     }
 
-    // Сохраняем параметры из конфига (если они не установлены извне)
+    // Initialize parameters if not already set
     if (weapon->motor_rpm == 0) {
         weapon->motor_rpm = WEAPON_MOTOR_RPM;
     }
@@ -26,77 +24,67 @@ void weapon_init(WeaponMotor_t* weapon) {
         weapon->gear_ratio = WEAPON_GEAR_RATIO;
     }
     
-    // Инициализируем переменные состояния
+    // Initialize state variables
     weapon->current_speed = 0;
-    weapon->current_pwm = 0;  // ШИМ начинается с 0
+    weapon->current_pwm = 0;
     weapon->is_rotating = false;
     weapon->rotation_start_ms = 0;
     weapon->target_time_ms = 0.0f;
 
-    // Шаг 2: Настройка пинов управления направлением как выходы
+    // Configure direction control pins as outputs
     pinMode(weapon->ina_pin, OUTPUT);
     pinMode(weapon->inb_pin, OUTPUT);
     
-    // Приводим их в состояние LOW (двигатель не включен)
+    // Set pins to LOW (motor disabled)
     digitalWrite(weapon->ina_pin, LOW);
     digitalWrite(weapon->inb_pin, LOW);
 
-    // Шаг 3: Настройка ШИМ через LEDC
-    // ledcSetup(канал, частота_в_Гц, разрешение_в_битах)
-    // PWM_FREQ = 5000 Гц, PWM_RES = 8 бит (значения 0-255)
+    // Configure PWM via LEDC
     ledcSetup(weapon->ledc_channel, PWM_FREQ, PWM_RES);
-    
-    // Привязываем физический пин PWM к настроенному каналу LEDC
     ledcAttachPin(weapon->pwm_pin, weapon->ledc_channel);
-    
-    // Устанавливаем начальное значение ШИМ на 0 (двигатель не вращается)
     ledcWrite(weapon->ledc_channel, 0);
 }
 
 /**
- * Установка скорости вращения двигателя.
+ * Set motor speed with TC1508 driver control.
  * 
- * Управление двигателем через драйвер TC1508:
- * - INA и INB являются логическими входами управления направлением
- * - PWM контролирует скорость (мощность)
+ * Logic:
+ *   speed > 0:  INA=HIGH, INB=LOW  (forward rotation)
+ *   speed < 0:  INA=LOW,  INB=HIGH (reverse rotation)
+ *   speed = 0:  INA=LOW,  INB=LOW  (full stop)
  * 
- * Логика:
- *   speed > 0:  INA=HIGH, INB=LOW  → вращение в прямом направлении
- *   speed < 0:  INA=LOW,  INB=HIGH → вращение в обратном направлении
- *   speed = 0:  INA=LOW,  INB=LOW  → полная остановка / торможение
+ * SAFETY: PWM is capped at WEAPON_MAX_PWM (200/255 = 78% = 9.8V)
+ * This protects TC1508 from thermal shutdown at 12.6V input
  */
 void weapon_set_speed(WeaponMotor_t* weapon, int speed) {
     if (!weapon) {
         return;
     }
 
-    // Ограничиваем скорость в диапазон [-255, 255]
+    // Limit speed to [-255, 255]
     if (speed > 255)  speed = 255;
     if (speed < -255) speed = -255;
 
-    // Сохраняем текущую скорость
+    // Save current speed
     weapon->current_speed = speed;
 
-    // Управление направлением через INA/INB логику
+    // Control direction via INA/INB logic
     if (speed > 0) {
-        // Вращение вперед
         digitalWrite(weapon->ina_pin, HIGH);
         digitalWrite(weapon->inb_pin, LOW);
     } 
     else if (speed < 0) {
-        // Вращение назад
         digitalWrite(weapon->ina_pin, LOW);
         digitalWrite(weapon->inb_pin, HIGH);
     } 
     else {
-        // Полная остановка
         digitalWrite(weapon->ina_pin, LOW);
         digitalWrite(weapon->inb_pin, LOW);
     }
 
-    // === ЗАЩИТА: ШИМ-ЛИМИТИРОВАНИЕ ===
-    // Максимум WEAPON_MAX_PWM (200 вместо 255) для защиты TC1508 от перегрева
-    // 200/255 = ~78% = 12.6В * 0.78 = 9.8В (ниже порога перегрева TC1508)
+    // SAFETY: PWM LIMITING
+    // Max WEAPON_MAX_PWM (200 instead of 255) to protect TC1508
+    // 200/255 = ~78% = 12.6V * 0.78 = 9.8V (below TC1508 thermal shutdown)
     int pwm_value = abs(speed);
     if (pwm_value > WEAPON_MAX_PWM) {
         pwm_value = WEAPON_MAX_PWM;
@@ -107,7 +95,7 @@ void weapon_set_speed(WeaponMotor_t* weapon, int speed) {
 }
 
 /**
- * Остановка двигателя (безопасная остановка).
+ * Safe motor stop.
  */
 void weapon_stop(WeaponMotor_t* weapon) {
     if (!weapon) {
@@ -118,10 +106,18 @@ void weapon_stop(WeaponMotor_t* weapon) {
 }
 
 /**
- * Инициирование вращения на заданный угол С ЗАЩИТОЙ от перегрузки.
+ * Initiate rotation to target angle WITH load protection.
  * 
- * ЗАЩИТА: Проверяет нагрузку ходовых моторов.
- * Если нагрузка > WEAPON_MOTOR_LOAD_THRESHOLD (50%) → блокирует выстрел
+ * SAFETY: Checks drive motor loads.
+ * If load > WEAPON_MOTOR_LOAD_THRESHOLD (50%) -> blocks fire
+ * This protects 7.5A fuse from overload when catapult + drive motors run together
+ * 
+ * @param weapon Pointer to weapon motor structure
+ * @param target_angle Target rotation angle (0-360 degrees)
+ * @param speed Motor speed (0-255)
+ * @param motor_left_load Drive motor left load percentage (0-100)
+ * @param motor_right_load Drive motor right load percentage (0-100)
+ * @return true if fire initiated successfully, false if blocked
  */
 bool weapon_rotate_to_angle(WeaponMotor_t* weapon, float target_angle, int speed,
                             uint8_t motor_left_load, uint8_t motor_right_load) {
@@ -129,19 +125,18 @@ bool weapon_rotate_to_angle(WeaponMotor_t* weapon, float target_angle, int speed
         return false;
     }
 
-    // === ЗАЩИТА: ПРОВЕРКА НАГРУЗКИ ХОДОВЫХ МОТОРОВ ===
-    // Если оба мотора работают на мощности > 50% → блокируем катапульту
-    // Это защищает предохранитель (макс 7.5А) от перегрузки
+    // SAFETY: CHECK DRIVE MOTOR LOADS
+    // If either motor load > 50% -> block catapult
+    // Protects fuse (max 7.5A) from overload
     uint8_t max_motor_load = (motor_left_load > motor_right_load) ? motor_left_load : motor_right_load;
     
     if (max_motor_load > WEAPON_MOTOR_LOAD_THRESHOLD) {
-        // Нагрузка слишком высока - заблокирован для безопасности
-        Serial.printf("[WEAPON BLOCKED] Motor load too high: L=%d%%, R=%d%% (max: %d%%)\n", 
+        Serial.printf("[WEAPON BLOCKED] Motor load too high: L=%d%%, R=%d%% (threshold: %d%%)\n", 
                       motor_left_load, motor_right_load, WEAPON_MOTOR_LOAD_THRESHOLD);
-        return false;  // Выстрел заблокирован
+        return false;
     }
 
-    // Нормализуем угол к диапазону [0, 360)
+    // Normalize angle to [0, 360)
     while (target_angle >= 360.0f) {
         target_angle -= 360.0f;
     }
@@ -149,83 +144,76 @@ bool weapon_rotate_to_angle(WeaponMotor_t* weapon, float target_angle, int speed
         target_angle += 360.0f;
     }
 
-    // Рассчитываем время для полного оборота (360°) в миллисекундах
+    // Calculate rotation time for 360 degrees in milliseconds
     // T_360_ms = 60000 / RPM
     float time_for_360_ms = 60000.0f / weapon->motor_rpm;
 
-    // Рассчитываем время для требуемого угла
+    // Calculate rotation time for target angle
     // T_angle_ms = (angle / 360) * T_360
     float required_time_ms = (target_angle / 360.0f) * time_for_360_ms;
 
-    // Если есть передаточное число (например, > 1.0), оно замедляет вращение
-    // Увеличиваем требуемое время
+    // Apply gear ratio (if > 1.0, it slows rotation)
     required_time_ms = required_time_ms / weapon->gear_ratio;
 
-    // Сохраняем параметры вращения
+    // Save rotation parameters
     weapon->target_time_ms = required_time_ms;
-    weapon->rotation_start_ms = millis();  // Запоминаем текущее время в мс
-    weaЛогируем успешное начало выстрела
-    Serial.printf("[WEAPON FIRE] Angle: %.1f°, Speed: %d, Load: L=%d%% R=%d%%\n",
+    weapon->rotation_start_ms = millis();
+    weapon->is_rotating = true;
+
+    Serial.printf("[WEAPON FIRE] Angle: %.1f degrees, Speed: %d, Load: L=%d%% R=%d%%\n",
                   target_angle, speed, motor_left_load, motor_right_load);
 
-    // Запускаем двигатель с указанной скоростью
+    // Start motor at specified speed
     weapon_set_speed(weapon, speed);
-    return true;  // Выстрел успешно инициирован
-    // Запускаем двигатель с указанной скоростью
-    weapon_set_speed(weapon, speed);
+    return true;
 }
 
 /**
- * Обновление состояния вращения.
- * Должна вызываться регулярно (примерно каждые 10-50 мс) в основном loop().
+ * Update rotation state - call regularly in main loop.
  * 
- * Логика:
- * 1. Проверяем, активно ли вращение на угол
- * 2. Если прошло достаточно времени — останавливаем двигатель и возвращаем true
- * 3. Иначе возвращаем false
+ * Logic:
+ * 1. Check if rotation is active
+ * 2. If target time reached -> stop motor and return true
+ * 3. Otherwise return false
  * 
- * @return true если вращение завершено (двигатель остановлен)
+ * @return true if rotation completed, false if still rotating
  */
 bool weapon_update_rotation(WeaponMotor_t* weapon) {
     if (!weapon || !weapon->is_rotating) {
         return false;
     }
 
-    // Получаем прошедшее время с момента начала вращения
     uint32_t elapsed_ms = millis() - weapon->rotation_start_ms;
 
-    // Проверяем, прошло ли требуемое время
     if (elapsed_ms >= weapon->target_time_ms) {
-        // Вращение завершено
         weapon_stop(weapon);
         weapon->is_rotating = false;
         return true;
     }
 
-    // Вращение еще продолжается
     return false;
 }
 
 /**
- * Получить текущее состояние вращения.
+ * Get current rotation state.
  * 
- * @return true если двигатель в процессе вращения на угол, false иначе
+ * @return true if motor is rotating to angle, false otherwise
  */
-b
+bool weapon_is_rotating(WeaponMotor_t* weapon) {
+    if (!weapon) {
+        return false;
+    }
+    return weapon->is_rotating;
+}
 
 /**
- * Получить текущий ШИМ (после ограничений защиты).
+ * Get current PWM value (after safety limits).
  * 
- * @return Текущое ШИМ значение (0-WEAPON_MAX_PWM)
+ * @return Current PWM value (0 to WEAPON_MAX_PWM)
  */
 int weapon_get_current_pwm(WeaponMotor_t* weapon) {
     if (!weapon) {
         return 0;
     }
     return weapon->current_pwm;
-}ool weapon_is_rotating(WeaponMotor_t* weapon) {
-    if (!weapon) {
-        return false;
-    }
-    return weapon->is_rotating;
 }
