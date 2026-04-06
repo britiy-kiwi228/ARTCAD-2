@@ -8,6 +8,8 @@ AsyncWebServer server(80);
 extern bool isFailsafeActive; // Флаг для отслеживания состояния Failsafe
 extern volatile uint32_t lastUpdateTime; // Время последней полученной команды
 extern WeaponMotor_t weapon_motor; // Доступ к структуре двигателя катапульты
+extern Motor_t motorL; // Левый мотор (для проверки нагрузки)
+extern Motor_t motorR; // Правый мотор (для проверки нагрузки)
 
 void wifi_init() {
     // ===== ИСПРАВЛЕНИЕ: Переключение с Access Point на режим клиента (STA) =====
@@ -173,16 +175,22 @@ void wifi_init() {
             if (weaponSpeed >= -255 && weaponSpeed <= 255) {
                 // Валидация угла (0...360)
                 if (weaponAngle >= 0 && weaponAngle <= 360) {
-                    // ===== ЛОГИКА ВЫСТРЕЛА =====
-                    // TODO: Здесь будет реальная механика выстрела
-                    // Пока что инициируем вращение на заданный угол
+                    // ===== ЛОГИКА ВЫСТРЕЛА С ЗАЩИТОЙ =====
+                    // Получаем текущую нагрузку ходовых моторов (%)
+                    uint8_t loadLeft = motor_get_load_percent(&motorL);
+                    uint8_t loadRight = motor_get_load_percent(&motorR);
                     
-                    weapon_rotate_to_angle(&weapon_motor, (float)weaponAngle, weaponSpeed);
+                    // Пытаемся выстрелить (функция проверит защиту)
+                    bool fireSuccess = weapon_rotate_to_angle(&weapon_motor, (float)weaponAngle, weaponSpeed,
+                                                              loadLeft, loadRight);
                     
-                    // Логируем в Serial для отладки
-                    Serial.printf("[WEAPON FIRE] Speed: %d, Angle: %d°\n", weaponSpeed, weaponAngle);
-                    
-                    request->send(200, "text/plain", "FIRE");
+                    if (fireSuccess) {
+                        // Выстрел успешно инициирован
+                        request->send(200, "text/plain", "FIRE");
+                    } else {
+                        // Выстрел заблокирован защитой (высокая нагрузка на моторы)
+                        request->send(409, "text/plain", "BLOCKED_HIGH_LOAD");
+                    }
                 } else {
                     request->send(400, "text/plain", "Invalid angle (0-360)");
                 }

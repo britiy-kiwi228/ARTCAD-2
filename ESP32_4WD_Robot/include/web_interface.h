@@ -530,10 +530,10 @@ const char index_html[] PROGMEM = R"rawliteral(
                 const response = await fetch(`/fire?w_speed=${Math.round(weaponSpeed)}&w_angle=${Math.round(weaponAngle)}`);
                 
                 if (response.ok) {
+                    // Выстрел успешно инициирован
                     statusText.textContent = `💥 ВЫСТРЕЛ! Скорость: ${Math.round(weaponSpeed)}, Угол: ${Math.round(weaponAngle)}°`;
                     
                     // Имитируем время вращения: примерно 150мс за полный оборот
-                    // Рассчитываем время для заданного угла
                     const rotationTime = (weaponAngle / 360) * 150;  // мс
                     
                     // Ждём завершения вращения
@@ -543,8 +543,14 @@ const char index_html[] PROGMEM = R"rawliteral(
                         weaponRotating = false;
                         statusText.textContent = `✓ Выстрел завершён`;
                     }, rotationTime + 100);  // +100мс буфер
-                    
+                } else if (response.status === 409) {
+                    // === ЗАЩИТА: Выстрел заблокирован из-за высокой нагрузки ===
+                    statusText.textContent = `⚠️ ВЫСТРЕЛ ЗАБЛОКИРОВАН! Снизьте скорость моторов (ходовые моторы перегружены)`;
+                    fireBtn.disabled = false;
+                    fireBtn.textContent = '🔫 ВЫСТРЕЛ';
+                    weaponRotating = false;
                 } else {
+                    // Другая ошибка
                     statusText.textContent = `✗ Ошибка выстрела: ${response.status}`;
                     fireBtn.disabled = false;
                     fireBtn.textContent = '🔫 ВЫСТРЕЛ';

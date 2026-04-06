@@ -28,6 +28,7 @@ void weapon_init(WeaponMotor_t* weapon) {
     
     // Инициализируем переменные состояния
     weapon->current_speed = 0;
+    weapon->current_pwm = 0;  // ШИМ начинается с 0
     weapon->is_rotating = false;
     weapon->rotation_start_ms = 0;
     weapon->target_time_ms = 0.0f;
@@ -93,10 +94,16 @@ void weapon_set_speed(WeaponMotor_t* weapon, int speed) {
         digitalWrite(weapon->inb_pin, LOW);
     }
 
-    // Управление скоростью через ШИМ (PWM)
-    // ledcWrite принимает значение от 0 до 255
-    // abs(speed) берет абсолютное значение (модуль)
-    ledcWrite(weapon->ledc_channel, abs(speed));
+    // === ЗАЩИТА: ШИМ-ЛИМИТИРОВАНИЕ ===
+    // Максимум WEAPON_MAX_PWM (200 вместо 255) для защиты TC1508 от перегрева
+    // 200/255 = ~78% = 12.6В * 0.78 = 9.8В (ниже порога перегрева TC1508)
+    int pwm_value = abs(speed);
+    if (pwm_value > WEAPON_MAX_PWM) {
+        pwm_value = WEAPON_MAX_PWM;
+    }
+    
+    weapon->current_pwm = pwm_value;
+    ledcWrite(weapon->ledc_channel, pwm_value);
 }
 
 /**
@@ -111,25 +118,27 @@ void weapon_stop(WeaponMotor_t* weapon) {
 }
 
 /**
- * Инициирование вращения на заданный угол.
+ * Инициирование вращения на заданный угол С ЗАЩИТОЙ от перегрузки.
  * 
- * Расчет времени вращения:
- * 
- * Формула расхода:
- * - Обороты в секунду: RPS = RPM / 60
- * - Время на 360° (полный оборот): T_360 = 1 / RPS = 60 / RPM (в секундах)
- * - Время на угол θ: T_θ = (θ / 360) * T_360 = (θ / 360) * (60 / RPM) * 1000 (в мс)
- * 
- * С учетом передаточного числа:
- * - T_actual = T_θ / gear_ratio (если gear_ratio замедляет вращение)
- * 
- * Пример с RPM=399:
- * - T_360 = 60000 / 399 ≈ 150.376 мс
- * - Для 180°: T_180 = (180 / 360) * 150.376 ≈ 75.188 мс
+ * ЗАЩИТА: Проверяет нагрузку ходовых моторов.
+ * Если нагрузка > WEAPON_MOTOR_LOAD_THRESHOLD (50%) → блокирует выстрел
  */
-void weapon_rotate_to_angle(WeaponMotor_t* weapon, float target_angle, int speed) {
+bool weapon_rotate_to_angle(WeaponMotor_t* weapon, float target_angle, int speed,
+                            uint8_t motor_left_load, uint8_t motor_right_load) {
     if (!weapon) {
-        return;
+        return false;
+    }
+
+    // === ЗАЩИТА: ПРОВЕРКА НАГРУЗКИ ХОДОВЫХ МОТОРОВ ===
+    // Если оба мотора работают на мощности > 50% → блокируем катапульту
+    // Это защищает предохранитель (макс 7.5А) от перегрузки
+    uint8_t max_motor_load = (motor_left_load > motor_right_load) ? motor_left_load : motor_right_load;
+    
+    if (max_motor_load > WEAPON_MOTOR_LOAD_THRESHOLD) {
+        // Нагрузка слишком высока - заблокирован для безопасности
+        Serial.printf("[WEAPON BLOCKED] Motor load too high: L=%d%%, R=%d%% (max: %d%%)\n", 
+                      motor_left_load, motor_right_load, WEAPON_MOTOR_LOAD_THRESHOLD);
+        return false;  // Выстрел заблокирован
     }
 
     // Нормализуем угол к диапазону [0, 360)
@@ -155,8 +164,13 @@ void weapon_rotate_to_angle(WeaponMotor_t* weapon, float target_angle, int speed
     // Сохраняем параметры вращения
     weapon->target_time_ms = required_time_ms;
     weapon->rotation_start_ms = millis();  // Запоминаем текущее время в мс
-    weapon->is_rotating = true;
+    weaЛогируем успешное начало выстрела
+    Serial.printf("[WEAPON FIRE] Angle: %.1f°, Speed: %d, Load: L=%d%% R=%d%%\n",
+                  target_angle, speed, motor_left_load, motor_right_load);
 
+    // Запускаем двигатель с указанной скоростью
+    weapon_set_speed(weapon, speed);
+    return true;  // Выстрел успешно инициирован
     // Запускаем двигатель с указанной скоростью
     weapon_set_speed(weapon, speed);
 }
@@ -197,7 +211,19 @@ bool weapon_update_rotation(WeaponMotor_t* weapon) {
  * 
  * @return true если двигатель в процессе вращения на угол, false иначе
  */
-bool weapon_is_rotating(WeaponMotor_t* weapon) {
+b
+
+/**
+ * Получить текущий ШИМ (после ограничений защиты).
+ * 
+ * @return Текущое ШИМ значение (0-WEAPON_MAX_PWM)
+ */
+int weapon_get_current_pwm(WeaponMotor_t* weapon) {
+    if (!weapon) {
+        return 0;
+    }
+    return weapon->current_pwm;
+}ool weapon_is_rotating(WeaponMotor_t* weapon) {
     if (!weapon) {
         return false;
     }
