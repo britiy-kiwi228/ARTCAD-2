@@ -195,6 +195,53 @@ const char index_html[] PROGMEM = R"rawliteral(
             transform: scale(0.98);
         }
 
+        /* === ПАНЕЛЬ УПРАВЛЕНИЯ КАТАПУЛЬТОЙ === */
+        .weapon-panel {
+            background: rgba(255, 100, 0, 0.08);
+            border: 2px solid rgba(255, 100, 0, 0.3);
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 25px;
+            margin-bottom: 25px;
+        }
+
+        .weapon-panel h2 {
+            font-size: 16px;
+            color: #ff6400;
+            margin-bottom: 15px;
+            text-shadow: 0 0 8px rgba(255, 100, 0, 0.4);
+            text-align: center;
+        }
+
+        .weapon-control {
+            margin-bottom: 15px;
+        }
+
+        /* === КНОПКА ВЫСТРЕЛА === */
+        .fire-btn {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 15px;
+            border: none;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #ff6400, #ff8c00);
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(255, 100, 0, 0.4);
+        }
+
+        .fire-btn:hover {
+            background: linear-gradient(135deg, #ff7722, #ff9922);
+            box-shadow: 0 6px 16px rgba(255, 100, 0, 0.6);
+        }
+
+        .fire-btn:active {
+            transform: scale(0.95);
+        }
+
         /* === СТАТУС === */
         .status {
             text-align: center;
@@ -266,6 +313,32 @@ const char index_html[] PROGMEM = R"rawliteral(
                 <span class="value" id="servoValue">90</span>
             </div>
             <input type="range" id="servoSlider" min="0" max="180" value="90">
+        </div>
+
+        <!-- === ПАНЕЛЬ УПРАВЛЕНИЯ КАТАПУЛЬТОЙ === -->
+        <div class="weapon-panel">
+            <h2>⚔️ Система вооружения</h2>
+            
+            <!-- Контроль скорости катапульты -->
+            <div class="weapon-control">
+                <div class="slider-label">
+                    <span>Скорость мотора (-255...255)</span>
+                    <span class="value" id="weaponSpeedValue">0</span>
+                </div>
+                <input type="range" id="weaponSpeedSlider" min="-255" max="255" value="0">
+            </div>
+
+            <!-- Контроль угла поворота -->
+            <div class="weapon-control">
+                <div class="slider-label">
+                    <span>Угол поворота (0-360°)</span>
+                    <span class="value" id="weaponAngleValue">0</span>
+                </div>
+                <input type="range" id="weaponAngleSlider" min="0" max="360" value="0">
+            </div>
+
+            <!-- Кнопка выстрела -->
+            <button class="fire-btn" id="fireBtn">🔫 ВЫСТРЕЛ</button>
         </div>
 
         <!-- ВИРТУАЛЬНЫЙ ДЖОЙСТИК -->
@@ -346,6 +419,11 @@ const char index_html[] PROGMEM = R"rawliteral(
         let joystickActive = false;  // Флаг: пользователь держит джойстик
         let queuedCommand = null;    // Очередная команда, если throttle активен
         let lastSentCommand = { l: 0, r: 0, s: 90 }; // Последняя отправленная команда
+        
+        // === ПЕРЕМЕННЫЕ СОСТОЯНИЯ КАТАПУЛЬТЫ ===
+        let currentWeaponSpeed = 0;  // Скорость мотора катапульты (-255...255)
+        let currentWeaponAngle = 0;  // Угол поворота (0-360°)
+        let weaponRotating = false;  // Флаг: сейчас вращаемся?
 
         // === ЭЛЕМЕНТЫ DOM ===
         const canvas = document.getElementById('joystickCanvas');
@@ -354,6 +432,13 @@ const char index_html[] PROGMEM = R"rawliteral(
         const servoSlider = document.getElementById('servoSlider');
         const statusText = document.getElementById('statusText');
         const statusIndicator = document.getElementById('statusIndicator');
+        
+        // === ЭЛЕМЕНТЫ DOM КАТАПУЛЬТЫ ===
+        const weaponSpeedSlider = document.getElementById('weaponSpeedSlider');
+        const weaponAngleSlider = document.getElementById('weaponAngleSlider');
+        const fireBtn = document.getElementById('fireBtn');
+        const weaponSpeedValue = document.getElementById('weaponSpeedValue');
+        const weaponAngleValue = document.getElementById('weaponAngleValue');
 
         // === ОБНОВЛЕНИЕ СЛАЙДЕРА СКОРОСТИ ===
         speedSlider.addEventListener('input', (e) => {
@@ -367,6 +452,23 @@ const char index_html[] PROGMEM = R"rawliteral(
             document.getElementById('servoValue').textContent = currentServo;
             // Отправляем команду для обновления угла серво
             sendCommand(lastSentCommand.l, lastSentCommand.r, currentServo);
+        });
+
+        // === ОБНОВЛЕНИЕ СЛАЙДЕРА СКОРОСТИ КАТАПУЛЬТЫ ===
+        weaponSpeedSlider.addEventListener('input', (e) => {
+            currentWeaponSpeed = parseInt(e.target.value);
+            weaponSpeedValue.textContent = currentWeaponSpeed;
+        });
+
+        // === ОБНОВЛЕНИЕ СЛАЙДЕРА УГЛА КАТАПУЛЬТЫ ===
+        weaponAngleSlider.addEventListener('input', (e) => {
+            currentWeaponAngle = parseInt(e.target.value);
+            weaponAngleValue.textContent = currentWeaponAngle;
+        });
+
+        // === ОБРАБОТЧИК КНОПКИ ВЫСТРЕЛА ===
+        fireBtn.addEventListener('click', () => {
+            sendFire(currentWeaponSpeed, currentWeaponAngle);
         });
 
         // === ФУНКЦИЯ: Отправка команды на ESP32 ===
@@ -407,6 +509,52 @@ const char index_html[] PROGMEM = R"rawliteral(
             } catch (error) {
                 statusText.textContent = `✗ Нет соединения`;
                 statusIndicator.classList.remove('online');
+            }
+        }
+
+        // === ФУНКЦИЯ: Отправка команды ВЫСТРЕЛА на ESP32 ===
+        async function sendFire(weaponSpeed, weaponAngle) {
+            // Блокируем повторный выстрел, если уже вращаемся
+            if (weaponRotating) {
+                statusText.textContent = `⚠ Катапульта уже работает!`;
+                return;
+            }
+
+            weaponRotating = true;
+            fireBtn.disabled = true;
+            fireBtn.textContent = '⏳ Выстрел...';
+
+            try {
+                // Отправляем команду выстрела
+                // Параметры: w_speed (скорость), w_angle (угол)
+                const response = await fetch(`/fire?w_speed=${Math.round(weaponSpeed)}&w_angle=${Math.round(weaponAngle)}`);
+                
+                if (response.ok) {
+                    statusText.textContent = `💥 ВЫСТРЕЛ! Скорость: ${Math.round(weaponSpeed)}, Угол: ${Math.round(weaponAngle)}°`;
+                    
+                    // Имитируем время вращения: примерно 150мс за полный оборот
+                    // Рассчитываем время для заданного угла
+                    const rotationTime = (weaponAngle / 360) * 150;  // мс
+                    
+                    // Ждём завершения вращения
+                    setTimeout(() => {
+                        fireBtn.disabled = false;
+                        fireBtn.textContent = '🔫 ВЫСТРЕЛ';
+                        weaponRotating = false;
+                        statusText.textContent = `✓ Выстрел завершён`;
+                    }, rotationTime + 100);  // +100мс буфер
+                    
+                } else {
+                    statusText.textContent = `✗ Ошибка выстрела: ${response.status}`;
+                    fireBtn.disabled = false;
+                    fireBtn.textContent = '🔫 ВЫСТРЕЛ';
+                    weaponRotating = false;
+                }
+            } catch (error) {
+                statusText.textContent = `✗ Нет соединения с катапультой`;
+                fireBtn.disabled = false;
+                fireBtn.textContent = '🔫 ВЫСТРЕЛ';
+                weaponRotating = false;
             }
         }
 

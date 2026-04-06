@@ -1,11 +1,13 @@
 #include "wifi_handler.h"
 #include "secrets.h" // Файл с AP_SSID и AP_PASS
+#include "weapon_system.h" // Управление катапультой
 #include <Arduino.h>
 
 // Создаем объект сервера на порту 80 (стандарт для HTTP)
 AsyncWebServer server(80);
 extern bool isFailsafeActive; // Флаг для отслеживания состояния Failsafe
 extern volatile uint32_t lastUpdateTime; // Время последней полученной команды
+extern WeaponMotor_t weapon_motor; // Доступ к структуре двигателя катапульты
 
 void wifi_init() {
     // ===== ИСПРАВЛЕНИЕ: Переключение с Access Point на режим клиента (STA) =====
@@ -151,7 +153,48 @@ void wifi_init() {
         request->send(200, "application/json", response);
     });
 
-    // 4. Запуск асинхронного веб-сервера на порту 80
+    // 5. Endpoint "/fire" - команда для системы вооружения (выстрел катапульты)
+    // Пример запроса: http://192.168.X.X/fire?w_speed=200&w_angle=180
+    // w_speed - скорость мотора (-255...255)
+    // w_angle - угол поворота (0-360 градусов)
+    server.on("/fire", HTTP_GET, [](AsyncWebServerRequest *request) {
+        // Обновляем таймер failsafe (робот получил команду)
+        portDISABLE_INTERRUPTS();
+        lastUpdateTime = millis();
+        isFailsafeActive = false;
+        portENABLE_INTERRUPTS();
+        
+        // Проверяем, прислали ли параметры скорости и угла
+        if (request->hasParam("w_speed") && request->hasParam("w_angle")) {
+            int weaponSpeed = request->getParam("w_speed")->value().toInt();
+            int weaponAngle = request->getParam("w_angle")->value().toInt();
+            
+            // Валидация скорости (-255...255)
+            if (weaponSpeed >= -255 && weaponSpeed <= 255) {
+                // Валидация угла (0...360)
+                if (weaponAngle >= 0 && weaponAngle <= 360) {
+                    // ===== ЛОГИКА ВЫСТРЕЛА =====
+                    // TODO: Здесь будет реальная механика выстрела
+                    // Пока что инициируем вращение на заданный угол
+                    
+                    weapon_rotate_to_angle(&weapon_motor, (float)weaponAngle, weaponSpeed);
+                    
+                    // Логируем в Serial для отладки
+                    Serial.printf("[WEAPON FIRE] Speed: %d, Angle: %d°\n", weaponSpeed, weaponAngle);
+                    
+                    request->send(200, "text/plain", "FIRE");
+                } else {
+                    request->send(400, "text/plain", "Invalid angle (0-360)");
+                }
+            } else {
+                request->send(400, "text/plain", "Invalid speed (-255..255)");
+            }
+        } else {
+            request->send(400, "text/plain", "Missing w_speed or w_angle parameter");
+        }
+    });
+
+    // 6. Запуск асинхронного веб-сервера на порту 80
     // Сервер будет слушать входящие HTTP запросы
     // Это не блокирует выполнение loop() - работает асинхронно!
     server.begin();

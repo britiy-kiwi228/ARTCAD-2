@@ -4,6 +4,7 @@
 #include "WiFi.h"
 #include "wifi_handler.h"
 #include "ultrasonic.h"
+#include "weapon_system.h"  // Система управления катапультой
 // --- 1. Создание объектов моторов ---
 // Мы выделяем память под две структуры типа Motor_t.
 // Эти переменные глобальные, чтобы они были доступны во всём файле.
@@ -11,6 +12,7 @@
 Motor_t motorL; // Левый борт
 Motor_t motorR; // Правый борт
 Servo_t servoWeapon; 
+WeaponMotor_t weapon_motor;  // Двигатель катапульты
 Ultrasonic_t distanceSensor; // Датчик ультразвукового расстояния HC-SR04
 volatile uint32_t lastUpdateTime = 0; // Время последней полученной команды (для Failsafe)
 bool isFailsafeActive = false; // Флаг для отслеживания состояния Failsafe
@@ -40,13 +42,20 @@ void setup() {
     servoWeapon.pin = SERVO_SIG;  // Исправлено: использовать 'pin' вместо 'sig_pin'
     servoWeapon.ledc_channel = LEDC_CH_SERVO;
 
+    // --- 5. Заполнение данных двигателя катапульты ---
+    weapon_motor.ina_pin = WEAPON_INA;
+    weapon_motor.inb_pin = WEAPON_INB;
+    weapon_motor.pwm_pin = WEAPON_PWM;
+    weapon_motor.ledc_channel = LEDC_CH_WEAPON;
+    weapon_motor.motor_rpm = WEAPON_MOTOR_RPM;
+    weapon_motor.gear_ratio = WEAPON_GEAR_RATIO;
 
-
-    // --- 5. Физическая инициализация ---
+    // --- 6. Физическая инициализация ---
     // Вызываем нашу функцию, которая настроит пины и ШИМ внутри ESP32
     motor_init(&motorL);
     motor_init(&motorR);
     servo_init(&servoWeapon);
+    weapon_init(&weapon_motor);  // Инициализация катапульты
     ultrasonic_init(&distanceSensor);
     wifi_init();
 
@@ -122,6 +131,10 @@ void checkFailsafe() {
 
 void loop() {
     checkFailsafe(); // Проверяем безопасность в каждом цикле
+    
+    // === ОБНОВЛЕНИЕ СОСТОЯНИЯ КАТАПУЛЬТЫ ===
+    // Проверяем: завершило ли вращение на угол, если оно было инициировано
+    weapon_update_rotation(&weapon_motor);
     
     // ===== НЕБЛОКИРУЮЩИЙ ТАЙМЕР ДЛЯ УЛЬТРАЗВУКОВОГО ДАТЧИКА =====
     // Запускаем новое измерение расстояния каждые 100 миллисекунд
