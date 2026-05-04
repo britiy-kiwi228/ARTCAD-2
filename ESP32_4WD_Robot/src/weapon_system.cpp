@@ -3,12 +3,12 @@
 #include <driver/ledc.h>
 #include <stdlib.h>
 /**
- * Initialize weapon system (TC1508 driver + motor).
+ * Initialize weapon system (L298N driver + motor).
  * 
  * Steps:
  * 1. Save motor parameters to structure
- * 2. Configure direction pins as outputs (INA, INB)
- * 3. Configure PWM channel (LEDC) for speed control
+ * 2. Configure direction pins as outputs (IN1, IN2)
+ * 3. Configure PWM channel (LEDC) for speed control on EN pin
  * 4. Bring motor to rest state
  */
 void weapon_init(WeaponMotor_t* weapon) {
@@ -31,30 +31,34 @@ void weapon_init(WeaponMotor_t* weapon) {
     weapon->rotation_start_ms = 0;
     weapon->target_time_ms = 0.0f;
 
-    // Configure direction control pins as outputs
-    pinMode(weapon->ina_pin, OUTPUT);
-    pinMode(weapon->inb_pin, OUTPUT);
+    // Configure direction control pins as outputs (IN1, IN2 for L298N)
+    pinMode(weapon->in1_pin, OUTPUT);
+    pinMode(weapon->in2_pin, OUTPUT);
     
     // Set pins to LOW (motor disabled)
-    digitalWrite(weapon->ina_pin, LOW);
-    digitalWrite(weapon->inb_pin, LOW);
+    digitalWrite(weapon->in1_pin, LOW);
+    digitalWrite(weapon->in2_pin, LOW);
 
-    // Configure PWM via LEDC
+    // Configure EN pin for PWM (speed control)
+    pinMode(weapon->en_pin, OUTPUT);
+    
+    // Configure PWM via LEDC on EN pin
     ledcSetup(weapon->ledc_channel, PWM_FREQ, PWM_RES);
-    ledcAttachPin(weapon->pwm_pin, weapon->ledc_channel);
+    ledcAttachPin(weapon->en_pin, weapon->ledc_channel);
     ledcWrite(weapon->ledc_channel, 0);
 }
 
 /**
- * Set motor speed with TC1508 driver control.
+ * Set motor speed with L298N driver control.
  * 
  * Logic:
- *   speed > 0:  INA=HIGH, INB=LOW  (forward rotation)
- *   speed < 0:  INA=LOW,  INB=HIGH (reverse rotation)
- *   speed = 0:  INA=LOW,  INB=LOW  (full stop)
+ *   speed > 0:  IN1=HIGH, IN2=LOW  (forward rotation)
+ *   speed < 0:  IN1=LOW,  IN2=HIGH (reverse rotation)
+ *   speed = 0:  IN1=LOW,  IN2=LOW  (full stop)
+ * EN pin gets PWM for speed control (0-255)
  * 
- * SAFETY: PWM is capped at WEAPON_MAX_PWM (200/255 = 78% = 9.8V)
- * This protects TC1508 from thermal shutdown at 12.6V input
+ * SAFETY: PWM is capped at WEAPON_MAX_PWM (200/255 = 78%)
+ * This protects L298N from thermal shutdown at high currents
  */
 void weapon_set_speed(WeaponMotor_t* weapon, int speed) {
     if (!weapon) {
@@ -68,23 +72,23 @@ void weapon_set_speed(WeaponMotor_t* weapon, int speed) {
     // Save current speed
     weapon->current_speed = speed;
 
-    // Control direction via INA/INB logic
+    // Control direction via IN1/IN2 logic
     if (speed > 0) {
-        digitalWrite(weapon->ina_pin, HIGH);
-        digitalWrite(weapon->inb_pin, LOW);
+        digitalWrite(weapon->in1_pin, HIGH);
+        digitalWrite(weapon->in2_pin, LOW);
     } 
     else if (speed < 0) {
-        digitalWrite(weapon->ina_pin, LOW);
-        digitalWrite(weapon->inb_pin, HIGH);
+        digitalWrite(weapon->in1_pin, LOW);
+        digitalWrite(weapon->in2_pin, HIGH);
     } 
     else {
-        digitalWrite(weapon->ina_pin, LOW);
-        digitalWrite(weapon->inb_pin, LOW);
+        digitalWrite(weapon->in1_pin, LOW);
+        digitalWrite(weapon->in2_pin, LOW);
     }
 
     // SAFETY: PWM LIMITING
-    // Max WEAPON_MAX_PWM (200 instead of 255) to protect TC1508
-    // 200/255 = ~78% = 12.6V * 0.78 = 9.8V (below TC1508 thermal shutdown)
+    // Max WEAPON_MAX_PWM (200 instead of 255) to protect L298N
+    // 200/255 = ~78% (reduces thermal stress)
     int pwm_value = abs(speed);
     if (pwm_value > WEAPON_MAX_PWM) {
         pwm_value = WEAPON_MAX_PWM;

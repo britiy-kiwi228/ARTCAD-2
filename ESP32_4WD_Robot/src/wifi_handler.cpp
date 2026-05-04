@@ -78,11 +78,10 @@ void wifi_init() {
         request->send_P(200, "text/html", index_html);
     });
 
-    // 2. Endpoint "/move" - команда управления моторами и сервом
-    // Пример запроса: http://192.168.X.X/move?l=200&r=150&s=90
-    // l - скорость левого мотора (-255...255)
-    // r - скорость правого мотора (-255...255)
-    // s - угол сервопривода оружия (0...180)
+    // 2. Endpoint "/move" - команда управления моторами и сервом через кнопки
+    // Пример запроса: http://192.168.X.X/move?btn=forward
+    // btn - направление: forward, backward, left, right, stop
+    // s - угол сервопривода оружия (0...180) - опционально
     server.on("/move", HTTP_GET, [](AsyncWebServerRequest *request) {
         // ===== КРИТИЧНО: Обновляем lastUpdateTime В ПЕРВУЮ ОЧЕРЕДЬ =====
         // Это должно быть ПЕРВОЕ действие при получении команды!
@@ -92,17 +91,35 @@ void wifi_init() {
         isFailsafeActive = false;  // Сбрасываем флаг Failsafe (робот на связи!)
         portENABLE_INTERRUPTS();
         
-        // Проверяем, прислал ли смартфон параметры 'l' и 'r' (скорости моторов)
-        if (request->hasParam("l") && request->hasParam("r")) {
-            // Извлекаем значения из запроса и переводим из текста (String) в целое число (int)
-            int valL = request->getParam("l")->value().toInt();
-            int valR = request->getParam("r")->value().toInt();
+        // Проверяем, прислал ли смартфон параметр 'btn' (направление движения)
+        if (request->hasParam("btn")) {
+            String btn = request->getParam("btn")->value();
             
-            // Валидация параметров: скорость должна быть в диапазоне -255 до 255
-            if (valL >= -255 && valL <= 255 && valR >= -255 && valR <= 255) {
-                // Управляем моторами
-                motor_set_speed(&motorL, valL);
-                motor_set_speed(&motorR, valR);
+            // Логика управления движением робота
+            if (btn == "forward") {
+                // Вперед: оба колеса крутятся вперед
+                motor_set_speed(&motorL, MOTOR_MAX_SPEED);
+                motor_set_speed(&motorR, MOTOR_MAX_SPEED);
+            }
+            else if (btn == "backward") {
+                // Назад: оба колеса крутятся назад
+                motor_set_speed(&motorL, -MOTOR_MAX_SPEED);
+                motor_set_speed(&motorR, -MOTOR_MAX_SPEED);
+            }
+            else if (btn == "left") {
+                // Влево: правый вперед, левый медленно назад
+                motor_set_speed(&motorL, -MOTOR_TURN_SPEED);
+                motor_set_speed(&motorR, MOTOR_MAX_SPEED);
+            }
+            else if (btn == "right") {
+                // Вправо: левый вперед, правый медленно назад
+                motor_set_speed(&motorL, MOTOR_MAX_SPEED);
+                motor_set_speed(&motorR, -MOTOR_TURN_SPEED);
+            }
+            else if (btn == "stop") {
+                // Стоп: оба колеса останавливаются
+                motor_set_speed(&motorL, 0);
+                motor_set_speed(&motorR, 0);
             }
         }
 

@@ -39,18 +39,22 @@ void setup() {
     motorR.in2_pin = MOTOR_R_IN2;
     motorR.ledc_channel = LEDC_CH_R;
     // --- 4. Заполнение данных сервопривода ---
-    servoWeapon.pin = SERVO_SIG;  // Исправлено: использовать 'pin' вместо 'sig_pin'
-    servoWeapon.ledc_channel = LEDC_CH_SERVO;
+    servoWeapon.pin = SERVO_SIG;  // Пин управления
+    servoWeapon.ledc_channel = LEDC_CH_SERVO;  // Канал ШИМ
 
-    // --- 5. Заполнение данных двигателя катапульты ---
-    weapon_motor.ina_pin = WEAPON_INA;
-    weapon_motor.inb_pin = WEAPON_INB;
-    weapon_motor.pwm_pin = WEAPON_PWM;
+    // --- 5. Заполнение данных ультразвукового датчика ---
+    distanceSensor.trig_pin = ULTRA_TRIG;  // Пин TRIGGER
+    distanceSensor.echo_pin = ULTRA_ECHO;  // Пин ECHO
+
+    // --- 6. Заполнение данных двигателя катапульты ---
+    weapon_motor.en_pin = WEAPON_EN;
+    weapon_motor.in1_pin = WEAPON_IN1;
+    weapon_motor.in2_pin = WEAPON_IN2;
     weapon_motor.ledc_channel = LEDC_CH_WEAPON;
     weapon_motor.motor_rpm = WEAPON_MOTOR_RPM;
     weapon_motor.gear_ratio = WEAPON_GEAR_RATIO;
 
-    // --- 6. Физическая инициализация ---
+    // --- 7. Физическая инициализация ---
     // Вызываем нашу функцию, которая настроит пины и ШИМ внутри ESP32
     motor_init(&motorL);
     motor_init(&motorR);

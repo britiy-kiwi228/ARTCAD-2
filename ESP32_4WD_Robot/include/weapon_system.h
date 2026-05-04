@@ -5,19 +5,19 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-// Safety parameters for TC1508 motor driver
+// Safety parameters for L298N motor driver
 #define WEAPON_MAX_PWM 200
 #define WEAPON_MOTOR_LOAD_THRESHOLD 50
 #define WEAPON_SOFT_START_TIME_MS 100
 
 /**
  * Weapon motor control structure.
- * Encapsulates motor parameters and state for TC1508 driver control.
+ * Encapsulates motor parameters and state for L298N driver control.
  */
 typedef struct {
-    uint8_t ina_pin;
-    uint8_t inb_pin;
-    uint8_t pwm_pin;
+    uint8_t en_pin;       // Enable pin (for PWM speed control)
+    uint8_t in1_pin;      // Input 1 (direction control)
+    uint8_t in2_pin;      // Input 2 (direction control)
     uint8_t ledc_channel;
     
     float motor_rpm;
@@ -45,7 +45,7 @@ void weapon_init(WeaponMotor_t* weapon);
  * @param weapon Pointer to WeaponMotor_t structure
  * @param speed Speed from -255 (max reverse) to 255 (max forward), 0 = stop
  * 
- * SAFETY: PWM limited to WEAPON_MAX_PWM to prevent TC1508 thermal shutdown
+ * SAFETY: PWM limited to WEAPON_MAX_PWM to prevent L298N thermal shutdown
  */
 void weapon_set_speed(WeaponMotor_t* weapon, int speed);
 

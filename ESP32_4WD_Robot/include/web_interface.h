@@ -1,7 +1,7 @@
 #ifndef WEB_INTERFACE_H
 #define WEB_INTERFACE_H
 
-// HTML/CSS/JS код интерфейса управления роботом с ВИРТУАЛЬНЫМ ДЖОЙСТИКОМ
+// HTML/CSS/JS код интерфейса управления роботом с КНОПКАМИ ДВИЖЕНИЯ
 // Хранится в PROGMEM для экономии оперативной памяти ESP32
 const char index_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
@@ -242,7 +242,72 @@ const char index_html[] PROGMEM = R"rawliteral(
             transform: scale(0.95);
         }
 
-        /* === СТАТУС === */
+        /* === КНОПКИ УПРАВЛЕНИЯ ДВИЖЕНИЕМ === */
+        .movement-buttons {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 25px;
+            padding: 20px;
+            background: rgba(77, 174, 255, 0.08);
+            border: 2px solid rgba(77, 174, 255, 0.3);
+            border-radius: 15px;
+        }
+
+        .movement-btn {
+            padding: 15px 10px;
+            border: none;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #4daeff, #0088ff);
+            color: white;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(77, 174, 255, 0.3);
+        }
+
+        .movement-btn:hover {
+            background: linear-gradient(135deg, #5dbfff, #0099ff);
+            box-shadow: 0 6px 16px rgba(77, 174, 255, 0.5);
+        }
+
+        .movement-btn:active {
+            transform: scale(0.95);
+            box-shadow: 0 2px 8px rgba(77, 174, 255, 0.3);
+        }
+
+        .movement-btn-forward {
+            grid-column: 2;
+            grid-row: 1;
+        }
+
+        .movement-btn-left {
+            grid-column: 1;
+            grid-row: 2;
+        }
+
+        .movement-btn-stop {
+            grid-column: 2;
+            grid-row: 2;
+            background: linear-gradient(135deg, #ff4444, #ff0000);
+            box-shadow: 0 4px 12px rgba(255, 68, 68, 0.3);
+        }
+
+        .movement-btn-stop:hover {
+            background: linear-gradient(135deg, #ff6666, #ff2222);
+            box-shadow: 0 6px 16px rgba(255, 68, 68, 0.5);
+        }
+
+        .movement-btn-right {
+            grid-column: 3;
+            grid-row: 2;
+        }
+
+        .movement-btn-backward {
+            grid-column: 2;
+            grid-row: 3;
+        }
         .status {
             text-align: center;
             margin-top: 20px;
@@ -341,20 +406,14 @@ const char index_html[] PROGMEM = R"rawliteral(
             <button class="fire-btn" id="fireBtn">🔫 ВЫСТРЕЛ</button>
         </div>
 
-        <!-- ВИРТУАЛЬНЫЙ ДЖОЙСТИК -->
-        <div class="joystick-container">
-            <canvas 
-                id="joystickCanvas" 
-                width="250" 
-                height="250"
-            ></canvas>
-            <div class="joystick-hint">
-                Потяни джойстик для управления движением
-            </div>
+        <!-- === КНОПКИ УПРАВЛЕНИЯ ДВИЖЕНИЕМ === -->
+        <div class="movement-buttons">
+            <button class="movement-btn movement-btn-forward" id="btnForward">▲ Вперед</button>
+            <button class="movement-btn movement-btn-left" id="btnLeft">◀ Влево</button>
+            <button class="movement-btn movement-btn-stop" id="btnStop">🛑 СТОП</button>
+            <button class="movement-btn movement-btn-right" id="btnRight">▶ Вправо</button>
+            <button class="movement-btn movement-btn-backward" id="btnBackward">▼ Назад</button>
         </div>
-
-        <!-- Кнопка СТОП -->
-        <button class="stop-btn" id="emergencyStop">🛑 СТОП</button>
 
         <div class="status">
             <span class="status-indicator" id="statusIndicator"></span>
@@ -405,20 +464,8 @@ const char index_html[] PROGMEM = R"rawliteral(
             }
         }
 
-        // === КОНФИГУРАЦИЯ ===
-        const CONFIG = {
-            throttleMs: 50,      // Минимальный интервал между командами (50мс = 20 команд/сек)
-            joystickRadius: 80,  // Радиус движения джойстика в пиксели
-            canvasSize: 250      // Размер canvas элемента (квадратный)
-        };
-
         // === ПЕРЕМЕННЫЕ СОСТОЯНИЯ ===
-        let lastCommandTime = 0;
-        let currentSpeed = 128;      // Значение скорости из слайдера (0-255)
         let currentServo = 90;       // Значение угла серво из слайдера (0-180)
-        let joystickActive = false;  // Флаг: пользователь держит джойстик
-        let queuedCommand = null;    // Очередная команда, если throttle активен
-        let lastSentCommand = { l: 0, r: 0, s: 90 }; // Последняя отправленная команда
         
         // === ПЕРЕМЕННЫЕ СОСТОЯНИЯ КАТАПУЛЬТЫ ===
         let currentWeaponSpeed = 0;  // Скорость мотора катапульты (-255...255)
@@ -426,8 +473,6 @@ const char index_html[] PROGMEM = R"rawliteral(
         let weaponRotating = false;  // Флаг: сейчас вращаемся?
 
         // === ЭЛЕМЕНТЫ DOM ===
-        const canvas = document.getElementById('joystickCanvas');
-        const ctx = canvas.getContext('2d');
         const speedSlider = document.getElementById('speedSlider');
         const servoSlider = document.getElementById('servoSlider');
         const statusText = document.getElementById('statusText');
@@ -440,18 +485,12 @@ const char index_html[] PROGMEM = R"rawliteral(
         const weaponSpeedValue = document.getElementById('weaponSpeedValue');
         const weaponAngleValue = document.getElementById('weaponAngleValue');
 
-        // === ОБНОВЛЕНИЕ СЛАЙДЕРА СКОРОСТИ ===
-        speedSlider.addEventListener('input', (e) => {
-            currentSpeed = parseInt(e.target.value);
-            document.getElementById('speedValue').textContent = currentSpeed;
-        });
-
         // === ОБНОВЛЕНИЕ СЛАЙДЕРА СЕРВО ===
         servoSlider.addEventListener('input', (e) => {
             currentServo = parseInt(e.target.value);
             document.getElementById('servoValue').textContent = currentServo;
-            // Отправляем команду для обновления угла серво
-            sendCommand(lastSentCommand.l, lastSentCommand.r, currentServo);
+            // Отправляем команду для обновления угла серво (без движения, используем последнюю команду)
+            sendCommand('stop');
         });
 
         // === ОБНОВЛЕНИЕ СЛАЙДЕРА СКОРОСТИ КАТАПУЛЬТЫ ===
@@ -471,37 +510,40 @@ const char index_html[] PROGMEM = R"rawliteral(
             sendFire(currentWeaponSpeed, currentWeaponAngle);
         });
 
-        // === ФУНКЦИЯ: Отправка команды на ESP32 ===
-        async function sendCommand(left, right, servo) {
+        // === ОБРАБОТЧИКИ КНОПОК УПРАВЛЕНИЯ ДВИЖЕНИЕМ ===
+        document.getElementById('btnForward').addEventListener('click', () => {
+            sendCommand('forward');
+        });
+
+        document.getElementById('btnBackward').addEventListener('click', () => {
+            sendCommand('backward');
+        });
+
+        document.getElementById('btnLeft').addEventListener('click', () => {
+            sendCommand('left');
+        });
+
+        document.getElementById('btnRight').addEventListener('click', () => {
+            sendCommand('right');
+        });
+
+        document.getElementById('btnStop').addEventListener('click', () => {
+            sendCommand('stop');
+        });
+
+        // === ФУНКЦИЯ: Отправка команды на ESP32 (с кнопками управления) ===
+        async function sendCommand(button) {
             const now = Date.now();
             
-            // Сохраняем последнюю отправленную команду
-            lastSentCommand = { l: left, r: right, s: servo };
-
-            // THROTTLE: если прошло меньше чем throttleMs, ставим в очередь
-            if (now - lastCommandTime < CONFIG.throttleMs) {
-                queuedCommand = { left, right, servo };
-                return;
-            }
-
-            // Отправляем команду
-            lastCommandTime = now;
-            queuedCommand = null;
-
+            // Формируем URL с параметром btn и углом серво
+            const url = `/move?btn=${button}&s=${Math.round(currentServo)}`;
+            
             try {
-                // Формируем URL: /move?l=[значение]&r=[значение]&s=[угол]
-                const response = await fetch(`/move?l=${Math.round(left)}&r=${Math.round(right)}&s=${Math.round(servo)}`);
+                const response = await fetch(url);
                 
                 if (response.ok) {
-                    statusText.textContent = `✓ L:${Math.round(left)} R:${Math.round(right)} S:${Math.round(servo)}`;
+                    statusText.textContent = `✓ Команда: ${button} | Серво: ${Math.round(currentServo)}°`;
                     statusIndicator.classList.add('online');
-                    
-                    // Если была очередная команда, отправляем её через промежуток времени
-                    if (queuedCommand) {
-                        setTimeout(() => {
-                            sendCommand(queuedCommand.left, queuedCommand.right, queuedCommand.servo);
-                        }, CONFIG.throttleMs);
-                    }
                 } else {
                     statusText.textContent = `✗ Ошибка: ${response.status}`;
                     statusIndicator.classList.remove('online');
@@ -564,189 +606,9 @@ const char index_html[] PROGMEM = R"rawliteral(
             }
         }
 
-        // === ФУНКЦИЯ: Рисование джойстика на Canvas ===
-        function drawJoystick(thumbX = 0, thumbY = 0) {
-            const centerX = CONFIG.canvasSize / 2;
-            const centerY = CONFIG.canvasSize / 2;
-            const radius = CONFIG.joystickRadius;
-
-            // Очищаем canvas от предыдущего рисунка
-            ctx.clearRect(0, 0, CONFIG.canvasSize, CONFIG.canvasSize);
-
-            // === РИСУЕМ ВНЕШНИЙ КРУГ (BOUNDARY) ===
-            ctx.strokeStyle = 'rgba(77, 174, 255, 0.4)';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-            ctx.stroke();
-
-            // === РИСУЕМ СЕТКУ (КРЕСТОВИНА) ===
-            ctx.strokeStyle = 'rgba(77, 174, 255, 0.15)';
-            ctx.lineWidth = 1;
-            
-            // Горизонтальная линия
-            ctx.beginPath();
-            ctx.moveTo(centerX - radius, centerY);
-            ctx.lineTo(centerX + radius, centerY);
-            ctx.stroke();
-            
-            // Вертикальная линия
-            ctx.beginPath();
-            ctx.moveTo(centerX, centerY - radius);
-            ctx.lineTo(centerX, centerY + radius);
-            ctx.stroke();
-
-            // === РИСУЕМ ЦЕНТРАЛЬНУЮ ТОЧКУ ===
-            ctx.fillStyle = 'rgba(77, 174, 255, 0.6)';
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, 5, 0, Math.PI * 2);
-            ctx.fill();
-
-            // === ОГРАНИЧИВАЕМ ДВИЖЕНИЕ THUMB ВНУТРИ КРУГА ===
-            const distance = Math.sqrt(thumbX * thumbX + thumbY * thumbY);
-            if (distance > radius) {
-                const angle = Math.atan2(thumbY, thumbX);
-                thumbX = Math.cos(angle) * radius;
-                thumbY = Math.sin(angle) * radius;
-            }
-
-            // === РИСУЕМ THUMB (УКАЗАТЕЛЬ ДЖОЙСТИКА) ===
-            const thumbRadius = 20;
-            ctx.fillStyle = joystickActive 
-                ? 'rgba(77, 174, 255, 0.9)' 
-                : 'rgba(77, 174, 255, 0.6)';
-            ctx.shadowColor = 'rgba(77, 174, 255, 0.8)';
-            ctx.shadowBlur = 15;
-            ctx.beginPath();
-            ctx.arc(centerX + thumbX, centerY + thumbY, thumbRadius, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.shadowBlur = 0;
-
-            return { thumbX, thumbY, distance: distance > radius ? radius : distance };
-        }
-
-        // === ФУНКЦИЯ: Преобразование координат джойстика в команды движения (TANK DRIVE) ===
-        function joystickToMotorCommand(thumbX, thumbY, maxSpeed = currentSpeed) {
-            const radius = CONFIG.joystickRadius;
-            
-            // Нормализуем расстояние от центра (0..1)
-            const normalizedDistance = Math.min(1, Math.sqrt(thumbX * thumbX + thumbY * thumbY) / radius);
-            
-            // Вычисляем угол от центра джойстика (в радианах)
-            // 0 радиан = вправо, PI/2 = вниз, PI/-PI = влево, -PI/2 = вверх
-            const angle = Math.atan2(thumbY, thumbX);
-            
-            // === ТАНК-КОНТРОЛЬ ФОРМУЛА ===
-            // forward = движение вперёд (зависит от угла и расстояния)
-            // turn = поворот (положительный = вправо, отрицательный = влево)
-            // left_speed = forward - turn
-            // right_speed = forward + turn
-            
-            // Используем atan2 с корректировкой угла, чтобы "вверх" был вперёд (0°)
-            const correctAngle = angle + Math.PI / 2; // Смещаем так, чтобы 0 был вверху
-            
-            // Вычисляем forward и turn
-            const forward = normalizedDistance * Math.cos(correctAngle) * maxSpeed;
-            const turn = normalizedDistance * Math.sin(correctAngle) * maxSpeed;
-            
-            let leftSpeed = forward - turn;
-            let rightSpeed = forward + turn;
-            
-            // Ограничиваем диапазон [-255, 255]
-            leftSpeed = Math.max(-255, Math.min(255, leftSpeed));
-            rightSpeed = Math.max(-255, Math.min(255, rightSpeed));
-            
-            return { left: leftSpeed, right: rightSpeed };
-        }
-
-        // === ФУНКЦИЯ: Получение координат взаимодействия (touch/mouse) ===
-        function getJoystickCoordinates(e) {
-            const rect = canvas.getBoundingClientRect();
-            const centerX = CONFIG.canvasSize / 2;
-            const centerY = CONFIG.canvasSize / 2;
-            
-            let clientX, clientY;
-            
-            // Проверяем тип события (touch или mouse)
-            if (e.touches && e.touches.length > 0) {
-                // Touch event - берём первый палец
-                clientX = e.touches[0].clientX;
-                clientY = e.touches[0].clientY;
-            } else {
-                // Mouse event
-                clientX = e.clientX;
-                clientY = e.clientY;
-            }
-            
-            // Нормализуем координаты относительно canvas с учётом DPI
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
-            
-            const x = (clientX - rect.left) * scaleX - centerX;
-            const y = (clientY - rect.top) * scaleY - centerY;
-            
-            return { x, y };
-        }
-
-        // === ОБРАБОТЧИК: MOUSEDOWN / TOUCHSTART (начало взаимодействия) ===
-        canvas.addEventListener('mousedown', handleJoystickStart);
-        canvas.addEventListener('touchstart', handleJoystickStart, { passive: false });
-
-        function handleJoystickStart(e) {
-            e.preventDefault();
-            joystickActive = true;
-            handleJoystickMove(e); // Сразу обновляем положение
-        }
-
-        // === ОБРАБОТЧИК: MOUSEMOVE / TOUCHMOVE (движение джойстика) ===
-        document.addEventListener('mousemove', handleJoystickMove);
-        document.addEventListener('touchmove', handleJoystickMove, { passive: false });
-
-        function handleJoystickMove(e) {
-            if (!joystickActive) return;
-            
-            e.preventDefault();
-            const { x, y } = getJoystickCoordinates(e);
-            
-            // Рисуем обновленное положение джойстика
-            const { thumbX, thumbY } = drawJoystick(x, y);
-            
-            // Преобразуем координаты в команды моторов
-            const motorCommand = joystickToMotorCommand(thumbX, thumbY);
-            
-            // Отправляем команду с throttle
-            sendCommand(motorCommand.left, motorCommand.right, currentServo);
-        }
-
-        // === ОБРАБОТЧИК: MOUSEUP / TOUCHEND (отпускание джойстика) ===
-        document.addEventListener('mouseup', handleJoystickEnd);
-        document.addEventListener('touchend', handleJoystickEnd, { passive: false });
-
-        function handleJoystickEnd(e) {
-            if (!joystickActive) return;
-            
-            e.preventDefault();
-            joystickActive = false;
-            
-            // Возвращаем джойстик в центр
-            drawJoystick(0, 0);
-            
-            // Отправляем команду стопа (l=0, r=0, сохраняем текущий угол серво)
-            sendCommand(0, 0, currentServo);
-        }
-
-        // === ОБРАБОТЧИК: КНОПКА АВАРИЙНОГО СТОПА ===
-        document.getElementById('emergencyStop').addEventListener('click', () => {
-            joystickActive = false;
-            drawJoystick(0, 0);
-            sendCommand(0, 0, currentServo);
-            statusText.textContent = '🛑 АВАРИЙНАЯ ОСТАНОВКА!';
-        });
-
         // === ИНИЦИАЛИЗАЦИЯ ===
-        // При загрузке страницы рисуем джойстик в нейтральном положении (центр)
+        // При загрузке страницы инициализируем интерфейс
         window.addEventListener('load', () => {
-            drawJoystick(0, 0);
             statusIndicator.classList.add('online');
             
             // === АВТООБНОВЛЕНИЕ РАССТОЯНИЯ КАЖДЫЕ 100 МС ===
