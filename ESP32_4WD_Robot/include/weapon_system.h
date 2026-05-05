@@ -81,6 +81,17 @@ bool weapon_rotate_to_angle(WeaponMotor_t* weapon, float target_angle, int speed
 bool weapon_update_rotation(WeaponMotor_t* weapon);
 
 /**
+ * Simple fire command: rotate 45 degrees then return.
+ * Used for catapult launches.
+ * 
+ * @param weapon Pointer to WeaponMotor_t structure
+ * @param motor_left_load Drive motor left load percentage (0-100)
+ * @param motor_right_load Drive motor right load percentage (0-100)
+ * @return true if fire initiated, false if blocked
+ */
+bool weapon_fire_simple(WeaponMotor_t* weapon, uint8_t motor_left_load, uint8_t motor_right_load);
+
+/**
  * Get current rotation state.
  * 
  * @param weapon Pointer to WeaponMotor_t structure

@@ -79,8 +79,9 @@ void wifi_init() {
     });
 
     // 2. Endpoint "/move" - команда управления моторами и сервом через кнопки
-    // Пример запроса: http://192.168.X.X/move?btn=forward
+    // Пример запроса: http://192.168.X.X/move?btn=forward&speed=128
     // btn - направление: forward, backward, left, right, stop
+    // speed - скорость моторов (0-255)
     // s - угол сервопривода оружия (0...180) - опционально
     server.on("/move", HTTP_GET, [](AsyncWebServerRequest *request) {
         // ===== КРИТИЧНО: Обновляем lastUpdateTime В ПЕРВУЮ ОЧЕРЕДЬ =====
@@ -95,26 +96,37 @@ void wifi_init() {
         if (request->hasParam("btn")) {
             String btn = request->getParam("btn")->value();
             
-            // Логика управления движением робота
+            // Получаем скорость из параметра (по умолчанию 128 если не указана)
+            int speed = 128;
+            if (request->hasParam("speed")) {
+                speed = request->getParam("speed")->value().toInt();
+                // Ограничиваем диапазон
+                if (speed < 0) speed = 0;
+                if (speed > 255) speed = 255;
+            }
+            
+            // Логика управления движением робота со скоростью из ползунка
             if (btn == "forward") {
-                // Вперед: оба колеса крутятся вперед
-                motor_set_speed(&motorL, MOTOR_MAX_SPEED);
-                motor_set_speed(&motorR, MOTOR_MAX_SPEED);
+                // Вперед: оба колеса крутятся вперед с заданной скоростью
+                motor_set_speed(&motorL, speed);
+                motor_set_speed(&motorR, speed);
             }
             else if (btn == "backward") {
-                // Назад: оба колеса крутятся назад
-                motor_set_speed(&motorL, -MOTOR_MAX_SPEED);
-                motor_set_speed(&motorR, -MOTOR_MAX_SPEED);
+                // Назад: оба колеса крутятся назад с заданной скоростью
+                motor_set_speed(&motorL, -speed);
+                motor_set_speed(&motorR, -speed);
             }
             else if (btn == "left") {
-                // Влево: правый вперед, левый медленно назад
-                motor_set_speed(&motorL, -MOTOR_TURN_SPEED);
-                motor_set_speed(&motorR, MOTOR_MAX_SPEED);
+                // Влево: правый вперед на полной скорости, левый помогает подворачиванию (30%)
+                int turnSpeed = (speed * 30) / 100;  // 30% от заданной скорости
+                motor_set_speed(&motorL, turnSpeed);     
+                motor_set_speed(&motorR, speed);       
             }
             else if (btn == "right") {
-                // Вправо: левый вперед, правый медленно назад
-                motor_set_speed(&motorL, MOTOR_MAX_SPEED);
-                motor_set_speed(&motorR, -MOTOR_TURN_SPEED);
+                // Вправо: левый вперед на полной скорости, правый помогает подворачиванию (30%)
+                int turnSpeed = (speed * 30) / 100;  // 30% от заданной скорости
+                motor_set_speed(&motorL, speed);       
+                motor_set_speed(&motorR, turnSpeed);     
             }
             else if (btn == "stop") {
                 // Стоп: оба колеса останавливаются
@@ -173,9 +185,9 @@ void wifi_init() {
     });
 
     // 5. Endpoint "/fire" - команда для системы вооружения (выстрел катапульты)
-    // Пример запроса: http://192.168.X.X/fire?w_speed=200&w_angle=180
-    // w_speed - скорость мотора (-255...255)
-    // w_angle - угол поворота (0-360 градусов)
+    // Пример запроса: http://192.168.X.X/fire?w_speed=200&w_angle=45
+    // w_speed - скорость мотора (1-255)
+    // w_angle - угол поворота (0-360 градусов, обычно 45)
     server.on("/fire", HTTP_GET, [](AsyncWebServerRequest *request) {
         // Обновляем таймер failsafe (робот получил команду)
         portDISABLE_INTERRUPTS();
@@ -188,8 +200,8 @@ void wifi_init() {
             int weaponSpeed = request->getParam("w_speed")->value().toInt();
             int weaponAngle = request->getParam("w_angle")->value().toInt();
             
-            // Валидация скорости (-255...255)
-            if (weaponSpeed >= -255 && weaponSpeed <= 255) {
+            // Валидация скорости (1...255)
+            if (weaponSpeed > 0 && weaponSpeed <= 255) {
                 // Валидация угла (0...360)
                 if (weaponAngle >= 0 && weaponAngle <= 360) {
                     // ===== ЛОГИКА ВЫСТРЕЛА С ЗАЩИТОЙ =====
@@ -212,7 +224,7 @@ void wifi_init() {
                     request->send(400, "text/plain", "Invalid angle (0-360)");
                 }
             } else {
-                request->send(400, "text/plain", "Invalid speed (-255..255)");
+                request->send(400, "text/plain", "Invalid speed (1-255)");
             }
         } else {
             request->send(400, "text/plain", "Missing w_speed or w_angle parameter");

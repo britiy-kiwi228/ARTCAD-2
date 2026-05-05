@@ -75,6 +75,10 @@ void setup() {
     lastUpdateTime = millis();      // Время последней команды (inits heartbeat)
     setupCompleteTime = millis();   // Время завершения инициализации
     
+    // === ЗАПУСК ПЕРВОГО ИЗМЕРЕНИЯ ДАТЧИКА ===
+    // Датчик должен начать работу сразу после инициализации, не ждать команды моторов
+    ultrasonic_start_measurement(&distanceSensor);
+    
     Serial.println("\n[FAILSAFE] Grace period: 3 seconds for WiFi initialization...\n");
 }
 

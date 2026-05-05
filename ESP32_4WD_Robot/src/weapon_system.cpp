@@ -221,3 +221,17 @@ int weapon_get_current_pwm(WeaponMotor_t* weapon) {
     }
     return weapon->current_pwm;
 }
+
+/**
+ * Simple fire command: rotate 45 degrees then return.
+ * This is a simplified version that just rotates the catapult arm for launching.
+ */
+bool weapon_fire_simple(WeaponMotor_t* weapon, uint8_t motor_left_load, uint8_t motor_right_load) {
+    if (!weapon) {
+        return false;
+    }
+    
+    // Use the existing rotation function with WEAPON_ROTATION_ANGLE (45 degrees)
+    return weapon_rotate_to_angle(weapon, WEAPON_ROTATION_ANGLE, WEAPON_ROTATION_SPEED,
+                                  motor_left_load, motor_right_load);
+}

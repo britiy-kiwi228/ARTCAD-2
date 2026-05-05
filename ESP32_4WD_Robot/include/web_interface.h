@@ -265,6 +265,10 @@ const char index_html[] PROGMEM = R"rawliteral(
             cursor: pointer;
             transition: all 0.2s ease;
             box-shadow: 0 4px 12px rgba(77, 174, 255, 0.3);
+            user-select: none;  // Запретить выделение текста при клике
+            -webkit-user-select: none;  // Для Safari/iOS
+            -moz-user-select: none;     // Для Firefox
+            -ms-user-select: none;      // Для IE/Edge
         }
 
         .movement-btn:hover {
@@ -387,19 +391,19 @@ const char index_html[] PROGMEM = R"rawliteral(
             <!-- Контроль скорости катапульты -->
             <div class="weapon-control">
                 <div class="slider-label">
-                    <span>Скорость мотора (-255...255)</span>
-                    <span class="value" id="weaponSpeedValue">0</span>
+                    <span>Скорость мотора (50-255)</span>
+                    <span class="value" id="weaponSpeedValue">200</span>
                 </div>
-                <input type="range" id="weaponSpeedSlider" min="-255" max="255" value="0">
+                <input type="range" id="weaponSpeedSlider" min="50" max="255" value="200">
             </div>
 
             <!-- Контроль угла поворота -->
             <div class="weapon-control">
                 <div class="slider-label">
-                    <span>Угол поворота (0-360°)</span>
-                    <span class="value" id="weaponAngleValue">0</span>
+                    <span>Угол поворота (45° для выстрела)</span>
+                    <span class="value" id="weaponAngleValue">45</span>
                 </div>
-                <input type="range" id="weaponAngleSlider" min="0" max="360" value="0">
+                <input type="range" id="weaponAngleSlider" min="0" max="360" value="45">
             </div>
 
             <!-- Кнопка выстрела -->
@@ -408,11 +412,11 @@ const char index_html[] PROGMEM = R"rawliteral(
 
         <!-- === КНОПКИ УПРАВЛЕНИЯ ДВИЖЕНИЕМ === -->
         <div class="movement-buttons">
-            <button class="movement-btn movement-btn-forward" id="btnForward">▲ Вперед</button>
-            <button class="movement-btn movement-btn-left" id="btnLeft">◀ Влево</button>
-            <button class="movement-btn movement-btn-stop" id="btnStop">🛑 СТОП</button>
-            <button class="movement-btn movement-btn-right" id="btnRight">▶ Вправо</button>
-            <button class="movement-btn movement-btn-backward" id="btnBackward">▼ Назад</button>
+            <button class="movement-btn movement-btn-forward" id="btnForward">▲</button>
+            <button class="movement-btn movement-btn-left" id="btnLeft">◀</button>
+            <button class="movement-btn movement-btn-stop" id="btnStop">🛑</button>
+            <button class="movement-btn movement-btn-right" id="btnRight">▶</button>
+            <button class="movement-btn movement-btn-backward" id="btnBackward">▼</button>
         </div>
 
         <div class="status">
@@ -468,9 +472,9 @@ const char index_html[] PROGMEM = R"rawliteral(
         let currentServo = 90;       // Значение угла серво из слайдера (0-180)
         
         // === ПЕРЕМЕННЫЕ СОСТОЯНИЯ КАТАПУЛЬТЫ ===
-        let currentWeaponSpeed = 0;  // Скорость мотора катапульты (-255...255)
-        let currentWeaponAngle = 0;  // Угол поворота (0-360°)
-        let weaponRotating = false;  // Флаг: сейчас вращаемся?
+        let currentWeaponSpeed = 200;  // Скорость мотора катапульты (50-255) - по умолчанию 200
+        let currentWeaponAngle = 45;   // Угол поворота (45° для стандартного выстрела)
+        let weaponRotating = false;    // Флаг: сейчас вращаемся?
 
         // === ЭЛЕМЕНТЫ DOM ===
         const speedSlider = document.getElementById('speedSlider');
@@ -535,14 +539,17 @@ const char index_html[] PROGMEM = R"rawliteral(
         async function sendCommand(button) {
             const now = Date.now();
             
-            // Формируем URL с параметром btn и углом серво
-            const url = `/move?btn=${button}&s=${Math.round(currentServo)}`;
+            // Получаем текущую скорость из ползунка
+            const currentSpeed = parseInt(speedSlider.value);
+            
+            // Формируем URL с параметром btn, скоростью и углом серво
+            const url = `/move?btn=${button}&speed=${currentSpeed}&s=${Math.round(currentServo)}`;
             
             try {
                 const response = await fetch(url);
                 
                 if (response.ok) {
-                    statusText.textContent = `✓ Команда: ${button} | Серво: ${Math.round(currentServo)}°`;
+                    statusText.textContent = `✓ ${button.toUpperCase()} | Скорость: ${currentSpeed}`;
                     statusIndicator.classList.add('online');
                 } else {
                     statusText.textContent = `✗ Ошибка: ${response.status}`;
@@ -575,8 +582,11 @@ const char index_html[] PROGMEM = R"rawliteral(
                     // Выстрел успешно инициирован
                     statusText.textContent = `💥 ВЫСТРЕЛ! Скорость: ${Math.round(weaponSpeed)}, Угол: ${Math.round(weaponAngle)}°`;
                     
-                    // Имитируем время вращения: примерно 150мс за полный оборот
-                    const rotationTime = (weaponAngle / 360) * 150;  // мс
+                    // Вычисляем время вращения (205 RPM = 292.68мс за 360°)
+                    // Время = (360° / RPM) * 60000мс = (360 / 205) * 60000 ≈ 292.68мс за полный оборот
+                    // Для 45° поворота = (45 / 360) * 292.68 ≈ 36.585мс
+                    // Добавляем буфер для торможения = 300мс
+                    const rotationTime = ((weaponAngle / 360) * (60000 / 205)) + 300;  // мс
                     
                     // Ждём завершения вращения
                     setTimeout(() => {
@@ -584,7 +594,7 @@ const char index_html[] PROGMEM = R"rawliteral(
                         fireBtn.textContent = '🔫 ВЫСТРЕЛ';
                         weaponRotating = false;
                         statusText.textContent = `✓ Выстрел завершён`;
-                    }, rotationTime + 100);  // +100мс буфер
+                    }, rotationTime);
                 } else if (response.status === 409) {
                     // === ЗАЩИТА: Выстрел заблокирован из-за высокой нагрузки ===
                     statusText.textContent = `⚠️ ВЫСТРЕЛ ЗАБЛОКИРОВАН! Снизьте скорость моторов (ходовые моторы перегружены)`;
