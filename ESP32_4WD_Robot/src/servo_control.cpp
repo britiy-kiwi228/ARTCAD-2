@@ -13,13 +13,22 @@ void servo_init(Servo_t* servo) {
     
     // ledcSetup(канал, частота_Hz, разрешение_бит)
     // Используем Channel 4 на Timer 1 с 50 Hz для серво
-    // На 10-бит разрешении (1024 уровня) это дает периоды от 0.5мс до 2.5мс
+    // На 10-бит разрешении (1024 уровня) это дает периоды от 0.5 мс до 2.5 мс
     ledcSetup(servo->ledc_channel, SERVO_FREQ, SERVO_RES);
     
     ledcAttachPin(servo->pin, servo->ledc_channel);
 
     // Устанавливаем начальный угол в 90 градусов (нейтральное положение)
     servo_set_angle(servo, 90);
+
+    // ОТЛАДКА: Вывод информации о инициализации серво
+    Serial.print("[SERVO INIT] Channel: ");
+    Serial.print(servo->ledc_channel);
+    Serial.print(" | Pin: ");
+    Serial.print(servo->pin);
+    Serial.print(" | Freq: ");
+    Serial.print(SERVO_FREQ);
+    Serial.println(" Hz");
 }
 
 void servo_set_angle(Servo_t* servo, int angle) {

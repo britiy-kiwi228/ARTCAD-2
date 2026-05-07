@@ -17,34 +17,27 @@ void motor_init(Motor_t* motor) {
     motor->is_soft_starting = false;
     
     // --- 2. Настройка пинов направления ---
-    
-    // pinMode — это функция HAL (Hardware Abstraction Layer).
-    // Она говорит контроллеру: "Переведи транзисторы внутри этой ножки 
-    // в режим выхода (OUTPUT), чтобы мы могли выдавать туда напряжение".
     pinMode(motor->in1_pin, OUTPUT);
     pinMode(motor->in2_pin, OUTPUT);
-
+    
     // Сразу подаем на них 0 (LOW), чтобы мотор не дернулся при включении.
     digitalWrite(motor->in1_pin, LOW);
     digitalWrite(motor->in2_pin, LOW);
-
-    // --- 3. Настройка аппаратного ШИМ (LEDC) ---
     
-    // В ESP32 ШИМ настраивается в три шага через встроенные функции:
-
-    // Шаг А: ledcSetup(канал, частота, разрешение)
-    // Мы берем значения из нашего конфига. 
-    // Эта функция настраивает внутренний таймер процессора.
+    // --- 3. Настройка аппаратного ШИМ (LEDC) ---
     ledcSetup(motor->ledc_channel, PWM_FREQ, PWM_RES);
-
-    // Шаг Б: ledcAttachPin(пин, канал)
-    // Мы "привязываем" физическую ножку (pwm_pin) к настроенному каналу ШИМ.
-    // Теперь всё, что мы отправим в канал, появится на этой ножке.
     ledcAttachPin(motor->pwm_pin, motor->ledc_channel);
-
-    // Шаг В: Устанавливаем начальную скорость в 0.
-    // ledcWrite(канал, значение_от_0_до_255)
     ledcWrite(motor->ledc_channel, 0);
+
+    // ОТЛАДКА: Вывод информации о инициализации мотора
+    Serial.print("[MOTOR INIT] Channel: ");
+    Serial.print(motor->ledc_channel);
+    Serial.print(" | PWM Pin: ");
+    Serial.print(motor->pwm_pin);
+    Serial.print(" | IN1: ");
+    Serial.print(motor->in1_pin);
+    Serial.print(" | IN2: ");
+    Serial.println(motor->in2_pin);
 }
 
 /**
