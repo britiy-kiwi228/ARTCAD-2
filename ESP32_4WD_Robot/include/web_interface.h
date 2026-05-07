@@ -493,8 +493,9 @@ const char index_html[] PROGMEM = R"rawliteral(
         servoSlider.addEventListener('input', (e) => {
             currentServo = parseInt(e.target.value);
             document.getElementById('servoValue').textContent = currentServo;
-            // Отправляем команду для обновления угла серво (без движения, используем последнюю команду)
-            sendCommand('stop');
+            // Отправляем ТОЛЬКО команду серво, БЕЗ команды движения (не вызываем sendCommand)
+            // Это позволяет менять положение серво без остановки моторов
+            sendServoCommand(currentServo);
         });
 
         // === ОБНОВЛЕНИЕ СЛАЙДЕРА СКОРОСТИ КАТАПУЛЬТЫ ===
@@ -534,6 +535,23 @@ const char index_html[] PROGMEM = R"rawliteral(
         document.getElementById('btnStop').addEventListener('click', () => {
             sendCommand('stop');
         });
+
+        // === ФУНКЦИЯ: Отправка ОТДЕЛЬНОЙ команды для серво (БЕЗ движения) ===
+        async function sendServoCommand(angle) {
+            try {
+                // Отправляем ТОЛЬКО параметр 's' (угол серво), БЕЗ 'btn' (движение)
+                const response = await fetch(`/move?s=${Math.round(angle)}`);
+                
+                if (response.ok) {
+                    // Серво успешно обновлен - не останавливаем моторы
+                    // Просто обновляем статус
+                } else {
+                    console.error('Servo update failed:', response.status);
+                }
+            } catch (error) {
+                console.error('Servo connection error:', error);
+            }
+        }
 
         // === ФУНКЦИЯ: Отправка команды на ESP32 (с кнопками управления) ===
         async function sendCommand(button) {
@@ -621,12 +639,25 @@ const char index_html[] PROGMEM = R"rawliteral(
         window.addEventListener('load', () => {
             statusIndicator.classList.add('online');
             
-            // === АВТООБНОВЛЕНИЕ РАССТОЯНИЯ КАЖДЫЕ 100 МС ===
+            // === ОПТИМИЗАЦИЯ: АВТООБНОВЛЕНИЕ РАССТОЯНИЯ КАЖДЫЕ 500 МС ===
+            // БЫЛО: setInterval(updateDistance, 100) - 10 раз в секунду - ПЕРЕГРУЖАЛО процессор
+            // СТАЛО: setInterval(updateDistance, 500) - 2 раза в секунду - ОПТИМАЛЬНО
+            // 
+            // ПОЧЕМУ ИСПРАВЛЯЛИ:
+            // - При частом опросе датчика ESP32 был перегружен обработкой
+            // - Это вызывало задержки в управлении моторами
+            // - Правый мотор не получал ШИМ сигналы вовремя и не крутился
+            // 
+            // ПОЧЕМУ 500мс достаточно:
+            // - Человеческий глаз не видит разницу между обновлением 2 или 10 раз в сек
+            // - Датчик все равно обновляется на сервере каждые 200мс
+            // - Экономим CPU для управления моторами и серво
+            
             // Запускаем первое обновление сразу
             updateDistance();
             
-            // Затем обновляем каждые 100 миллисекунд
-            setInterval(updateDistance, 100);
+            // Затем обновляем каждые 500 миллисекунд
+            setInterval(updateDistance, 500);
             
             // === HEARTBEAT ДЛЯ FAILSAFE ===
             // Отправляем пустой heartbeat запрос каждые 100мс

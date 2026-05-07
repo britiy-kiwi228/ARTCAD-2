@@ -25,13 +25,14 @@
 #define SERVO_MAX_DUTY 123     // ~2.4 мс (180 градусов)
 
 // Параметры для настройки ШИМ
-#define PWM_FREQ 5000
-#define PWM_RES 8 
+#define PWM_FREQ 5000        // Частота для ходовых моторов (5 kHz)
+#define PWM_RES 8            // Разрешение для моторов (8 бит, 0-255)
+
 // Каналы для ШИМ
-#define LEDC_CH_L 0
-#define LEDC_CH_R 1
-#define LEDC_CH_SERVO 4  // Используем Timer 1 (избегаем конфликта с моторами на Timer 0)
-#define LEDC_CH_WEAPON 5 // Канал для двигателя системы вооружения
+#define LEDC_CH_L 0          // Левый мотор, Timer 0, Ch 0, 5 kHz
+#define LEDC_CH_R 1          // Правый мотор, Timer 0, Ch 1, 5 kHz
+#define LEDC_CH_WEAPON 2     // Катапульта, Timer 0, Ch 2, 5 kHz
+#define LEDC_CH_SERVO 4      // Серво, Timer 1, Ch 4, 50 Hz (ОТДЕЛЬНЫЙ таймер чтобы не конфликтовать)
 
 // --- Параметры двигателя системы вооружения ---
 #define WEAPON_MOTOR_RPM 205           // Обороты в минуту (JGA25-370B)
