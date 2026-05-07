@@ -42,9 +42,9 @@ void setup() {
     servoWeapon.pin = SERVO_SIG;  // Пин управления
     servoWeapon.ledc_channel = LEDC_CH_SERVO;  // Канал ШИМ
 
-    // --- 5. Заполнение данных ультразвукового датчика ---
-    distanceSensor.trig_pin = ULTRA_TRIG;  // Пин TRIGGER
-    distanceSensor.echo_pin = ULTRA_ECHO;  // Пин ECHO
+    // --- 5. Заполнение данных ультразвукового датчика (ЗАКОММЕНТИРОВАНО) ---
+    // distanceSensor.trig_pin = ULTRA_TRIG;  // Пин TRIGGER
+    // distanceSensor.echo_pin = ULTRA_ECHO;  // Пин ECHO
 
     // --- 6. Заполнение данных двигателя катапульты ---
     weapon_motor.en_pin = WEAPON_EN;
@@ -60,7 +60,7 @@ void setup() {
     motor_init(&motorR);
     servo_init(&servoWeapon);
     weapon_init(&weapon_motor);  // Инициализация катапульты
-    ultrasonic_init(&distanceSensor);
+    // ultrasonic_init(&distanceSensor);
     wifi_init();
 
     // Для отладки откроем последовательный порт (монитор порта)
@@ -76,8 +76,7 @@ void setup() {
     setupCompleteTime = millis();   // Время завершения инициализации
     
     // === ЗАПУСК ПЕРВОГО ИЗМЕРЕНИЯ ДАТЧИКА ===
-    // Датчик должен начать работу сразу после инициализации, не ждать команды моторов
-    ultrasonic_start_measurement(&distanceSensor);
+    // ultrasonic_start_measurement(&distanceSensor);
     
     Serial.println("\n[FAILSAFE] Grace period: 3 seconds for WiFi initialization...\n");
 }
@@ -158,21 +157,14 @@ void loop() {
     //   - Чтение результата ТОЛЬКО в WiFi endpoint /distance при запросе со смартфона
     //   - Это дает датчику ВРЕМЯ между запусками для стабилизации
     
+    // БЛОКИРОВКА ДАТЧИКА ПО ПРОСЬБЕ ПОЛЬЗОВАТЕЛЯ
+    /*
     uint32_t currentTime = millis();
-    if ((uint32_t)(currentTime - lastUltrasonicTime) >= 200) {  // Увеличили с 100 на 200 мс
-        // Прошло 200 мс или больше - пора запустить новое измерение
+    if ((uint32_t)(currentTime - lastUltrasonicTime) >= 200) {
         ultrasonic_start_measurement(&distanceSensor);
         lastUltrasonicTime = currentTime;
-        
-        // ===== УДАЛИЛИ вызов ultrasonic_get_distance_cm() ОТСЮДА =====
-        // Это было КРИТИЧЕСКОЙ ошибкой производительности:
-        // - Функция вызывает noInterrupts()
-        // - Это блокирует LEDC таймеры моторов
-        // - Второй мотор теряет ШИМ сигнал во время чтения
-        // 
-        // Теперь читаем результат ТОЛЬКО когда смартфон запрашивает через API
-        // Это происходит редко (~1-2 раза в секунду) и не нарушает работу моторов
     }
+    */
     
     switch (currentState) {
         case STATE_IDLE:
