@@ -96,6 +96,8 @@ void motor_set_speed(Motor_t* motor, int speed) {
         digitalWrite(motor->in1_pin, LOW);
         digitalWrite(motor->in2_pin, HIGH);
     }
+    // ПРИМЕЧАНИЕ: Если правый мотор крутится в противоположную сторону,
+    // нужно поменять местами IN1 и IN2 пины в конфигурации или обратить логику здесь
 
     // Если плавный разгон активен → обновляем в motor_update_soft_start()
     // Иначе сразу применяем целевую скорость

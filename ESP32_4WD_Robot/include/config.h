@@ -25,14 +25,15 @@
 #define SERVO_MAX_DUTY 123     // ~2.4 мс (180 градусов)
 
 // Параметры для настройки ШИМ
-#define PWM_FREQ 5000        // Частота для ходовых моторов (5 kHz)
-#define PWM_RES 8            // Разрешение для моторов (8 бит, 0-255)
-
-// Каналы для ШИМ
-#define LEDC_CH_L 0          // Левый мотор, Timer 0, Ch 0, 5 kHz
-#define LEDC_CH_R 1          // Правый мотор, Timer 0, Ch 1, 5 kHz
-#define LEDC_CH_WEAPON 2     // Катапульта, Timer 0, Ch 2, 5 kHz
-#define LEDC_CH_SERVO 4      // Серво, Timer 1, Ch 4, 50 Hz (ОТДЕЛЬНЫЙ таймер чтобы не конфликтовать)
+#define PWM_FREQ 5000
+#define PWM_RES 8
+// Каналы для ШИМ (LEDC в ESP32)
+// Timer 0: каналы 0-3 @ 5000 Hz (ходовые моторы и система вооружения)
+// Timer 1: каналы 4-7 @ 50 Hz (сервопривод)
+#define LEDC_CH_L 0      // Timer 0, Channel 0 @ 5000 Hz
+#define LEDC_CH_R 1      // Timer 0, Channel 1 @ 5000 Hz
+#define LEDC_CH_WEAPON 2 // Timer 0, Channel 2 @ 5000 Hz (исправлено: было канал 5 на Timer 1)
+#define LEDC_CH_SERVO 4  // Timer 1, Channel 4 @ 50 Hz (разделен на отдельный таймер)
 
 // --- Параметры двигателя системы вооружения ---
 #define WEAPON_MOTOR_RPM 205           // Обороты в минуту (JGA25-370B)
@@ -49,7 +50,7 @@
 
 // --- Пины для ультразвукового датчика HC-SR04 ---
 #define ULTRA_TRIG 5   // Пин TRIGGER (запуск импульса)
-#define ULTRA_ECHO 18  // Пин ECHO (прием сигнала, через делитель напряжения 5V → 3.3V)
+#define ULTRA_ECHO 22  // Пин ECHO (прием сигнала, через делитель напряжения 5V → 3.3V) [исправлено: было 18]
 
 // --- Пины для кнопок управления ---
 #define BTN_FORWARD  12  // Кнопка вперед
