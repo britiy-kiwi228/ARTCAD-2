@@ -61,7 +61,7 @@ void motor_set_speed(Motor_t* motor, int speed) {
         motor->current_pwm = 0;
         motor->is_soft_starting = false;
         
-        // Управление направлением
+        // Управление направлением (Безопасная остановка для L298N)
         digitalWrite(motor->in1_pin, LOW);
         digitalWrite(motor->in2_pin, LOW);
         

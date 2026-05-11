@@ -1,10 +1,11 @@
 #ifndef CONFIG_H // Защита от повторного включения 
 #define CONFIG_H
-// Пины для подключения левого мотора
+// --- Пины для подключения ходовой части (L298N) ---
+// Мотор 1 (Левый): ENA (PWM) = 32, INA = 25, INB = 26
 #define MOTOR_L_PWM 32
 #define MOTOR_L_IN1 25
 #define MOTOR_L_IN2 26
-// Пины для подключения правого мотора 
+// Мотор 2 (Правый): ENB (PWM) = 33, INC = 27, IND = 14
 #define MOTOR_R_PWM 33
 #define MOTOR_R_IN1 27
 #define MOTOR_R_IN2 14
@@ -25,15 +26,15 @@
 #define SERVO_MAX_DUTY 123     // ~2.4 мс (180 градусов)
 
 // Параметры для настройки ШИМ
-#define PWM_FREQ 5000
+#define PWM_FREQ 12000     // 12 kHz (Оптимально для L298N)
 #define PWM_RES 8
 // Каналы для ШИМ (LEDC в ESP32)
-// Timer 0: каналы 0-3 @ 5000 Hz (система вооружения)
+// Timer 0: каналы 0-3 @ 12 kHz (система вооружения)
 // Timer 1: каналы 4-7 @ 50 Hz (сервопривод)
-// Timer 2: каналы 8-11 @ 5000 Hz (ходовые моторы)
-#define LEDC_CH_L 0      // Timer 0, Channel 0 @ 5000 Hz
-#define LEDC_CH_R 1      // Timer 0, Channel 1 @ 5000 Hz
-#define LEDC_CH_WEAPON 2 // Timer 0, Channel 2 @ 5000 Hz
+// Timer 2: каналы 8-11 @ 12 kHz (ходовые моторы)
+#define LEDC_CH_L 8      // Timer 2, Channel 8 @ 12 kHz
+#define LEDC_CH_R 9      // Timer 2, Channel 9 @ 12 kHz
+#define LEDC_CH_WEAPON 2 // Timer 0, Channel 2 @ 12 kHz
 #define LEDC_CH_SERVO 4  // Timer 1, Channel 4 @ 50 Hz
 
 // --- Параметры двигателя системы вооружения ---
