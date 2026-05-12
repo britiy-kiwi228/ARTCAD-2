@@ -48,6 +48,9 @@ void motor_init(Motor_t* motor) {
  * - Механику от резких рывков
  * - Предохранитель от срабатывания
  */
+// Минимальный порог ШИМ для преодоления инерции L298N (настройка под конкретные моторы)
+#define MOTOR_MIN_PWM_THRESHOLD 60 
+
 void motor_set_speed(Motor_t* motor, int speed) {
     // Валидация: ограничиваем диапазон
     if (speed > 255)  speed = 255;
@@ -56,30 +59,31 @@ void motor_set_speed(Motor_t* motor, int speed) {
     // Сохраняем целевую скорость
     motor->target_speed = speed;
 
-    // Если скорость 0 или меняется направление → сразу остановиться
+    // 1. Если скорость 0 -> Безопасная остановка (Coast)
     if (speed == 0) {
         motor->current_pwm = 0;
         motor->is_soft_starting = false;
         
-        // Управление направлением (Безопасная остановка для L298N)
         digitalWrite(motor->in1_pin, LOW);
         digitalWrite(motor->in2_pin, LOW);
-        
-        // Останавливаем ШИМ
         ledcWrite(motor->ledc_channel, 0);
         return;
     }
 
-    // === ПЛАВНЫЙ РАЗГОН (Soft Start) ===
-    // Если текущая скорость != целевой и они не меняют направление → начнем плавный разгон
-    if (abs(motor->current_pwm) < abs(speed)) {
-        motor->is_soft_starting = true;
-        motor->soft_start_begin_ms = millis();
-    } else {
-        motor->is_soft_starting = false;
+    // 2. Проверка смены направления (Safety: предотвращение Brake mode и скачков тока)
+    // Если текущее направление (на основе in1/in2) не совпадает с новым целевым направлением
+    bool new_dir_forward = (speed > 0);
+    bool current_dir_forward = (digitalRead(motor->in1_pin) == HIGH);
+
+    if (current_dir_forward != new_dir_forward) {
+        // Сначала полностью останавливаем ШИМ и сбрасываем пины в LOW
+        ledcWrite(motor->ledc_channel, 0);
+        digitalWrite(motor->in1_pin, LOW);
+        digitalWrite(motor->in2_pin, LOW);
+        delay(10); // Короткая пауза для разрядки индуктивности
     }
 
-    // Установим направление вращения
+    // 3. Установка направления вращения
     if (speed > 0) {
         // Вперед: IN1=1, IN2=0
         digitalWrite(motor->in1_pin, HIGH);
@@ -89,13 +93,25 @@ void motor_set_speed(Motor_t* motor, int speed) {
         digitalWrite(motor->in1_pin, LOW);
         digitalWrite(motor->in2_pin, HIGH);
     }
-    // ПРИМЕЧАНИЕ: Если правый мотор крутится в противоположную сторону,
-    // нужно поменять местами IN1 и IN2 пины в конфигурации или обратить логику здесь
 
-    // Если плавный разгон активен → обновляем в motor_update_soft_start()
-    // Иначе сразу применяем целевую скорость
+    // 4. Применение порога минимальной скорости (Dead-zone compensation)
+    int effective_speed = abs(speed);
+    if (effective_speed < MOTOR_MIN_PWM_THRESHOLD) {
+        effective_speed = MOTOR_MIN_PWM_THRESHOLD;
+    }
+
+    // 5. ПЛАВНЫЙ РАЗГОН (Soft Start)
+    if (abs(motor->current_pwm) < effective_speed) {
+        motor->is_soft_starting = true;
+        motor->soft_start_begin_ms = millis();
+    } else {
+        motor->is_soft_starting = false;
+    }
+
+    // Если плавный разгон активен -> управление идет через motor_update_soft_start()
+    // Иначе сразу применяем скорость
     if (!motor->is_soft_starting) {
-        motor->current_pwm = abs(speed);
+        motor->current_pwm = effective_speed;
         ledcWrite(motor->ledc_channel, motor->current_pwm);
     }
 }
