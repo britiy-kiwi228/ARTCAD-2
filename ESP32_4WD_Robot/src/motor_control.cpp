@@ -48,59 +48,44 @@ void motor_init(Motor_t* motor) {
  * - Механику от резких рывков
  * - Предохранитель от срабатывания
  */
-// Минимальный порог ШИМ для преодоления инерции L298N (настройка под конкретные моторы)
-#define MOTOR_MIN_PWM_THRESHOLD 60 
+// Минимальный порог ШИМ для преодоления инерции L298N
+#define MOTOR_MIN_PWM_THRESHOLD 120 
 
 void motor_set_speed(Motor_t* motor, int speed) {
-    // Валидация: ограничиваем диапазон
+    // Валидация
     if (speed > 255)  speed = 255;
     if (speed < -255) speed = -255;
 
-    // Сохраняем целевую скорость
     motor->target_speed = speed;
 
-    // 1. Если скорость 0 -> Безопасная остановка (Coast)
+    // 1. Остановка
     if (speed == 0) {
         motor->current_pwm = 0;
         motor->is_soft_starting = false;
-        
         digitalWrite(motor->in1_pin, LOW);
         digitalWrite(motor->in2_pin, LOW);
         ledcWrite(motor->ledc_channel, 0);
         return;
     }
 
-    // 2. Проверка смены направления (Safety: предотвращение Brake mode и скачков тока)
-    // Если текущее направление (на основе in1/in2) не совпадает с новым целевым направлением
-    bool new_dir_forward = (speed > 0);
-    bool current_dir_forward = (digitalRead(motor->in1_pin) == HIGH);
+    // 2. Определение целевого состояния пинов
+    bool target_in1 = (speed > 0);
+    bool target_in2 = (speed < 0);
 
-    if (current_dir_forward != new_dir_forward) {
-        // Сначала полностью останавливаем ШИМ и сбрасываем пины в LOW
-        ledcWrite(motor->ledc_channel, 0);
-        digitalWrite(motor->in1_pin, LOW);
-        digitalWrite(motor->in2_pin, LOW);
-        delay(10); // Короткая пауза для разрядки индуктивности
-    }
+    // 3. Применение направления (с предварительным сбросом для исключения Brake mode)
+    digitalWrite(motor->in1_pin, LOW);
+    digitalWrite(motor->in2_pin, LOW);
+    
+    digitalWrite(motor->in1_pin, target_in1 ? HIGH : LOW);
+    digitalWrite(motor->in2_pin, target_in2 ? HIGH : LOW);
 
-    // 3. Установка направления вращения
-    if (speed > 0) {
-        // Вперед: IN1=1, IN2=0
-        digitalWrite(motor->in1_pin, HIGH);
-        digitalWrite(motor->in2_pin, LOW);
-    } else {
-        // Назад: IN1=0, IN2=1
-        digitalWrite(motor->in1_pin, LOW);
-        digitalWrite(motor->in2_pin, HIGH);
-    }
-
-    // 4. Применение порога минимальной скорости (Dead-zone compensation)
+    // 4. Порог минимальной скорости
     int effective_speed = abs(speed);
     if (effective_speed < MOTOR_MIN_PWM_THRESHOLD) {
         effective_speed = MOTOR_MIN_PWM_THRESHOLD;
     }
 
-    // 5. ПЛАВНЫЙ РАЗГОН (Soft Start)
+    // 5. Плавный разгон
     if (abs(motor->current_pwm) < effective_speed) {
         motor->is_soft_starting = true;
         motor->soft_start_begin_ms = millis();
@@ -108,8 +93,6 @@ void motor_set_speed(Motor_t* motor, int speed) {
         motor->is_soft_starting = false;
     }
 
-    // Если плавный разгон активен -> управление идет через motor_update_soft_start()
-    // Иначе сразу применяем скорость
     if (!motor->is_soft_starting) {
         motor->current_pwm = effective_speed;
         ledcWrite(motor->ledc_channel, motor->current_pwm);
