@@ -18,6 +18,10 @@ volatile uint32_t lastUpdateTime = 0; // Время последней полу�
 bool isFailsafeActive = false; // Флаг для отслеживания состояния Failsafe
 volatile uint32_t lastUltrasonicTime = 0; // Время последнего измерения расстояния (для таймера 100 мс)
 volatile uint32_t setupCompleteTime = 0; // Время завершения инициализации (для grace period failsafe)
+// Переменные для передачи команд из WiFi в Loop
+volatile int cmdSpeedL = 0;
+volatile int cmdSpeedR = 0;
+volatile bool cmdChanged = false; 
 typedef enum{
     STATE_IDLE, // Робот стоит на месте
     STATE_DRIVING, // Робот движется
@@ -57,10 +61,15 @@ void setup() {
     // --- 7. Физическая инициализация ---
     // Вызываем нашу функцию, которая настроит пины и ШИМ внутри ESP32
     
-    servo_init(&servoWeapon);
-    weapon_init(&weapon_motor);  // Инициализация катапульты
-    ultrasonic_init(&distanceSensor);
+    motor_init(&motorL);
+    motor_init(&motorR);
+
+    
+    //servo_init(&servoWeapon);
+    //weapon_init(&weapon_motor);  // Инициализация катапульты
+    //ultrasonic_init(&distanceSensor);
     wifi_init();
+    
 
     // Для отладки откроем последовательный порт (монитор порта)
     Serial.println("Robot 4WD Initialized!");
@@ -69,8 +78,7 @@ void setup() {
     // Это гарантирует что все системы (WiFi, сервер) уже запущены
     // и heartbeat может отправляться БЕЗ race condition с инициализацией
     delay(100);  // Даем время на стабилизацию
-    motor_init(&motorL);
-    motor_init(&motorR);
+    
     
     lastUltrasonicTime = millis();  // Таймер ультразвукового датчика
     lastUpdateTime = millis();      // Время последней команды (inits heartbeat)
@@ -140,14 +148,36 @@ void checkFailsafe() {
 void loop() {
     //checkFailsafe(); // Проверяем безопасность в каждом цикле
     
+    static uint32_t lastTest = 0;
+    if (millis() - lastTest > 5000) {
+        lastTest = millis();
+        Serial.println("WiFi is ON, testing motors now...");
+        
+        // Включаем моторы на 2 секунды каждые 5 секунд
+        motor_set_speed(&motorL, 255);
+        motor_set_speed(&motorR, 255);
+        delay(2000);
+        motor_set_speed(&motorL, 0);
+        motor_set_speed(&motorR, 0);
+    }
+
+
+
+
+    if (cmdChanged) {
+        motor_set_speed(&motorL, cmdSpeedL);
+        motor_set_speed(&motorR, cmdSpeedR);
+        cmdChanged = false; // Сбрасываем флаг
+    }
+
+    // 2. Обновляем плавный пуск
+    motor_update_soft_start(&motorL);
+    motor_update_soft_start(&motorR);
     // === ОБНОВЛЕНИЕ СОСТОЯНИЯ КАТАПУЛЬТЫ ===
     // Проверяем: завершило ли вращение на угол, если оно было инициировано
     weapon_update_rotation(&weapon_motor);
     
-    // === ОБНОВЛЕНИЕ ПЛАВНОГО РАЗГОНА ХОДОВЫХ МОТОРОВ ===
-    // Плавный разгон защищает аккумулятор и предохранитель от ударных токов
-    motor_update_soft_start(&motorL);
-    motor_update_soft_start(&motorR);
+    
     
     // ===== ОПТИМИЗАЦИЯ: Ультразвуковой датчик - ТОЛЬКО запуск (БЕЗ чтения) =====
     // КРИТИЧНО: Чтение (ultrasonic_get_distance_cm) блокирует прерывания и нарушает ШИМ моторов!
@@ -160,10 +190,6 @@ void loop() {
     
     // Запуск измерения каждые 200 мс
     uint32_t currentTime = millis();
-    /*if ((uint32_t)(currentTime - lastUltrasonicTime) >= 200) {
-        ultrasonic_start_measurement(&distanceSensor);
-        lastUltrasonicTime = currentTime;
-    }*/
     
     switch (currentState) {
         case STATE_IDLE:

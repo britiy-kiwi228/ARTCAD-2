@@ -9,32 +9,21 @@
  * Принимает адрес структуры Motor_t.
  */
 void motor_init(Motor_t* motor) {
-    motor->target_speed = 0;
-    motor->current_pwm = 0;
-    motor->is_soft_starting = false;
+    // Принудительно отключаем ШИМ перед настройкой
+    ledcDetachPin(motor->pwm_pin);
     
-    // 1. Сначала настраиваем IN пины
     pinMode(motor->in1_pin, OUTPUT);
     pinMode(motor->in2_pin, OUTPUT);
+    pinMode(motor->pwm_pin, OUTPUT); // Пин ENA/ENB тоже в OUTPUT
+    
     digitalWrite(motor->in1_pin, LOW);
     digitalWrite(motor->in2_pin, LOW);
-
-    // 2. Настраиваем PWM пин как выход ПЕРЕД привязкой к ШИМ
-    pinMode(motor->pwm_pin, OUTPUT); 
     digitalWrite(motor->pwm_pin, LOW);
 
-    // 3. Инициализация ШИМ (для ядра 2.0.17)
-    // Важно: ledcSetup возвращает настроенную частоту, если всё ок
-    double real_freq = ledcSetup(motor->ledc_channel, PWM_FREQ, PWM_RES);
-    
-    if (real_freq == 0) {
-        Serial.printf("!!! PWM ERROR: Channel %d failed to setup!\n", motor->ledc_channel);
-    }
-
+    // Используем частоту 500 Гц и разрешение 8 бит
+    ledcSetup(motor->ledc_channel, PWM_FREQ, PWM_RES);
     ledcAttachPin(motor->pwm_pin, motor->ledc_channel);
     ledcWrite(motor->ledc_channel, 0);
-
-    Serial.printf("[MOTOR] Init OK. Pin:%d Channel:%d\n", motor->pwm_pin, motor->ledc_channel);
 }
 
 void motor_set_speed(Motor_t* motor, int speed) {

@@ -2,6 +2,7 @@
 #include "secrets.h" // Файл с AP_SSID и AP_PASS
 #include "weapon_system.h" // Управление катапультой
 #include <Arduino.h>
+#include <esp_wifi.h>
 
 // Создаем объект сервера на порту 80 (стандарт для HTTP)
 AsyncWebServer server(80);
@@ -9,7 +10,10 @@ extern bool isFailsafeActive; // Флаг для отслеживания сос
 extern volatile uint32_t lastUpdateTime; // Время последней полученной команды
 extern WeaponMotor_t weapon_motor; // Доступ к структуре двигателя катапульты
 extern Motor_t motorL; // Левый мотор (для проверки нагрузки)
-extern Motor_t motorR; // Правый мотор (для проверки нагрузки)
+extern Motor_t motorR; 
+extern volatile int cmdSpeedL; // Скорость левого мотора
+extern volatile int cmdSpeedR; // Скорость правого мотора
+extern volatile bool cmdChanged; // Флаг, что пришла новая команда для моторов
 
 void wifi_init() {
     // ===== ИСПРАВЛЕНИЕ: Переключение с Access Point на режим клиента (STA) =====
@@ -25,6 +29,11 @@ void wifi_init() {
     
     // Подключаемся к домашней WiFi сети с учеными данными из secrets.h
     WiFi.begin(AP_SSID, AP_PASS);
+    WiFi.setSleep(false); 
+    
+    // Снижаем мощность передатчика (чтобы не было помех на моторы)
+    // Иногда WiFi "давит" сигнал на близлежащих дорожках (GPIO 32, 33)
+    WiFi.setTxPower(WIFI_POWER_11dBm);
     
     // Ждем подключения с таймаутом 20 секунд (40 попыток по 500 мс)
     int attempts = 0;
@@ -84,69 +93,23 @@ void wifi_init() {
     // speed - скорость моторов (0-255)
     // s - угол сервопривода оружия (0...180) - опционально
     server.on("/move", HTTP_GET, [](AsyncWebServerRequest *request) {
-        // ===== КРИТИЧНО: Обновляем lastUpdateTime В ПЕРВУЮ ОЧЕРЕДЬ =====
-        // Это должно быть ПЕРВОЕ действие при получении команды!
-        // Защищаем от race condition отключением прерываний
+    lastUpdateTime = millis();
+    isFailsafeActive = false;
 
-        lastUpdateTime = millis();
-        isFailsafeActive = false;  // Сбрасываем флаг Failsafe (робот на связи!)
+    if (request->hasParam("btn")) {
+        String btn = request->getParam("btn")->value();
+        int speed = request->hasParam("speed") ? request->getParam("speed")->value().toInt() : 128;
 
+        if (btn == "forward")  { cmdSpeedL = speed;  cmdSpeedR = speed; }
+        else if (btn == "backward") { cmdSpeedL = -speed; cmdSpeedR = -speed; }
+        else if (btn == "left")     { cmdSpeedL = (speed*3/10); cmdSpeedR = speed; }
+        else if (btn == "right")    { cmdSpeedL = speed; cmdSpeedR = (speed*3/10); }
+        else if (btn == "stop")     { cmdSpeedL = 0; cmdSpeedR = 0; }
         
-        // Проверяем, прислал ли смартфон параметр 'btn' (направление движения)
-        if (request->hasParam("btn")) {
-            String btn = request->getParam("btn")->value();
-            
-            // Получаем скорость из параметра (по умолчанию 128 если не указана)
-            int speed = 128;
-            if (request->hasParam("speed")) {
-                speed = request->getParam("speed")->value().toInt();
-                // Ограничиваем диапазон
-                if (speed < 0) speed = 0;
-                if (speed > 255) speed = 255;
-            }
-            
-            // Логика управления движением робота со скоростью из ползунка
-            if (btn == "forward") {
-                // Вперед: оба колеса крутятся вперед с заданной скоростью
-                motor_set_speed(&motorL, speed);
-                motor_set_speed(&motorR, speed);
-            }
-            else if (btn == "backward") {
-                // Назад: оба колеса крутятся назад с заданной скоростью
-                motor_set_speed(&motorL, -speed);
-                motor_set_speed(&motorR, -speed);
-            }
-            else if (btn == "left") {
-                // Влево: правый вперед на полной скорости, левый помогает подворачиванию (30%)
-                int turnSpeed = (speed * 30) / 100;  // 30% от заданной скорости
-                motor_set_speed(&motorL, turnSpeed);     
-                motor_set_speed(&motorR, speed);       
-            }
-            else if (btn == "right") {
-                // Вправо: левый вперед на полной скорости, правый помогает подворачиванию (30%)
-                int turnSpeed = (speed * 30) / 100;  // 30% от заданной скорости
-                motor_set_speed(&motorL, speed);       
-                motor_set_speed(&motorR, turnSpeed);     
-            }
-            else if (btn == "stop") {
-                // Стоп: оба колеса останавливаются
-                motor_set_speed(&motorL, 0);
-                motor_set_speed(&motorR, 0);
-            }
-        }
-
-        // Если прислали параметр 's' (servo angle - угол сервопривода)
-        if (request->hasParam("s")) {
-            int valS = request->getParam("s")->value().toInt();
-            // Валидация параметра: угол должен быть в диапазоне 0-180 градусов
-            if (valS >= 0 && valS <= 180) {
-                servo_set_angle(&servoWeapon, valS);
-            }
-        }
-
-        // Отправляем ответ смартфону, что всё ОК (код HTTP 200)
-        request->send(200, "text/plain", "OK");
-    });
+        cmdChanged = true; // Ставим флаг, что пришла новая команда
+    }
+    request->send(200, "text/plain", "OK");
+});
 
     // 3. Endpoint "/heartbeat" - пустой запрос для обновления таймера failsafe
     // Отправляется каждые 100мс из JavaScript, чтобы failsafe не срабатывал
@@ -165,14 +128,14 @@ void wifi_init() {
     // 4. Endpoint "/distance" - получить текущее расстояние от датчика
     // Пример: GET http://192.168.X.X/distance
     // Ответ: {"distance": 45.3, "status": "ok"} или {"distance": -1.0, "status": "timeout"}
-    // В wifi_handler.cpp замени обработчик /distance на этот:
-    server.on("/distance", HTTP_GET, [](AsyncWebServerRequest *request) {
+    
+    /*server.on("/distance", HTTP_GET, [](AsyncWebServerRequest *request) {
         ultrasonic_start_measurement(&distanceSensor); 
         delayMicroseconds(100);
         float distance = ultrasonic_get_distance_cm(&distanceSensor);
         String response = "{\"distance\": " + String(distance) + ", \"status\": \"ok\"}";
         request->send(200, "application/json", response);
-    });
+    });*/
 
     // 5. Endpoint "/fire" - команда для системы вооружения (выстрел катапульты)
     // Пример запроса: http://192.168.X.X/fire?w_speed=200&w_angle=45
