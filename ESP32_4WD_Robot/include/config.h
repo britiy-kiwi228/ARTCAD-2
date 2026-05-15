@@ -32,8 +32,8 @@
 // Timer 0: каналы 0-3 @ 1000 Hz (система вооружения)
 // Timer 1: каналы 4-7 @ 50 Hz (сервопривод)
 // Timer 2: каналы 8-11 @ 1000 Hz (ходовые моторы)
-#define LEDC_CH_L 8      // Timer 2, Channel 8 @ 1000 Hz
-#define LEDC_CH_R 9      // Timer 2, Channel 9 @ 1000 Hz
+#define LEDC_CH_L 0      // Timer 2, Channel 8 @ 1000 Hz
+#define LEDC_CH_R 1      // Timer 2, Channel 9 @ 1000 Hz
 #define LEDC_CH_WEAPON 2 // Timer 0, Channel 2 @ 1000 Hz
 #define LEDC_CH_SERVO 4  // Timer 1, Channel 4 @ 50 Hz
 

@@ -9,35 +9,21 @@
  * Принимает адрес структуры Motor_t.
  */
 void motor_init(Motor_t* motor) {
-    
-    // --- 1. ИНИЦИАЛИЗАЦИЯ ПЕРЕМЕННЫХ СОСТОЯНИЯ ---
     motor->target_speed = 0;
     motor->current_pwm = 0;
-    motor->soft_start_begin_ms = 0;
     motor->is_soft_starting = false;
     
-    // --- 2. Настройка пинов направления ---
     pinMode(motor->in1_pin, OUTPUT);
     pinMode(motor->in2_pin, OUTPUT);
-    
-    // Сразу подаем на них 0 (LOW), чтобы мотор не дернулся при включении.
     digitalWrite(motor->in1_pin, LOW);
     digitalWrite(motor->in2_pin, LOW);
-    
-    // --- 3. Настройка аппаратного ШИМ (LEDC) ---
+
+    // ДЛЯ ТВОЕЙ ВЕРСИИ (2.0.17) НУЖНО ТАК:
     ledcSetup(motor->ledc_channel, PWM_FREQ, PWM_RES);
     ledcAttachPin(motor->pwm_pin, motor->ledc_channel);
     ledcWrite(motor->ledc_channel, 0);
 
-    // ОТЛАДКА: Вывод информации о инициализации мотора
-    Serial.print("[MOTOR INIT] Channel: ");
-    Serial.print(motor->ledc_channel);
-    Serial.print(" | PWM Pin: ");
-    Serial.print(motor->pwm_pin);
-    Serial.print(" | IN1: ");
-    Serial.print(motor->in1_pin);
-    Serial.print(" | IN2: ");
-    Serial.println(motor->in2_pin);
+    Serial.printf("[MOTOR] Channel %d attached to Pin %d\n", motor->ledc_channel, motor->pwm_pin);
 }
 
 /**
@@ -52,51 +38,58 @@ void motor_init(Motor_t* motor) {
 #define MOTOR_MIN_PWM_THRESHOLD 120 
 
 void motor_set_speed(Motor_t* motor, int speed) {
-    // Валидация
+    // 1. Ограничение входящего значения (защита от мусора)
     if (speed > 255)  speed = 255;
     if (speed < -255) speed = -255;
 
+    // 2. КРИТИЧЕСКАЯ ПРОВЕРКА: Если целевая скорость уже такая же, ничего не делаем.
+    // Это исключает постоянный сброс таймеров при получении пакетов от браузера.
+    if (motor->target_speed == speed) return;
+
     motor->target_speed = speed;
 
-    // 1. Остановка
+    // 3. Обработка полной остановки
     if (speed == 0) {
         motor->current_pwm = 0;
         motor->is_soft_starting = false;
         digitalWrite(motor->in1_pin, LOW);
         digitalWrite(motor->in2_pin, LOW);
-        ledcWrite(motor->ledc_channel, 0);
+        ledcWrite(motor->ledc_channel, 0); // Используем КАНАЛ для версии 2.0.17
         return;
     }
 
-    // 2. Определение целевого состояния пинов
-    bool target_in1 = (speed > 0);
-    bool target_in2 = (speed < 0);
-
-    // 3. Применение направления (с предварительным сбросом для исключения Brake mode)
+    // 4. Установка направления (IN пины)
+    // Сначала ставим оба в LOW для безопасности, потом нужное направление
     digitalWrite(motor->in1_pin, LOW);
     digitalWrite(motor->in2_pin, LOW);
     
-    digitalWrite(motor->in1_pin, target_in1 ? HIGH : LOW);
-    digitalWrite(motor->in2_pin, target_in2 ? HIGH : LOW);
+    if (speed > 0) {
+        digitalWrite(motor->in1_pin, HIGH);
+        digitalWrite(motor->in2_pin, LOW);
+    } else {
+        digitalWrite(motor->in1_pin, LOW);
+        digitalWrite(motor->in2_pin, HIGH);
+    }
 
-    // 4. Порог минимальной скорости
+    // 5. Расчет мощности ШИМ
     int effective_speed = abs(speed);
+
+    // Минимальный порог, чтобы мотор вообще сдвинулся (для L298N)
+    // Если скорость слишком мала, драйвер просто будет греться, но не крутить.
     if (effective_speed < MOTOR_MIN_PWM_THRESHOLD) {
         effective_speed = MOTOR_MIN_PWM_THRESHOLD;
     }
 
-    // 5. Плавный разгон
-    if (abs(motor->current_pwm) < effective_speed) {
-        motor->is_soft_starting = true;
-        motor->soft_start_begin_ms = millis();
-    } else {
-        motor->is_soft_starting = false;
-    }
+    // 6. ПРИМЕНЕНИЕ (Временно отключаем плавный пуск для теста)
+    // Мы сразу подаем нужную скорость, чтобы исключить ошибки в loop()
+    motor->current_pwm = effective_speed;
+    motor->is_soft_starting = false; // Отключаем логику разгона в loop
+    
+    // ВАЖНО: В твоей версии ядра (2.0.17) ledcWrite работает ТОЛЬКО с КАНАЛОМ
+    ledcWrite(motor->ledc_channel, motor->current_pwm);
 
-    if (!motor->is_soft_starting) {
-        motor->current_pwm = effective_speed;
-        ledcWrite(motor->ledc_channel, motor->current_pwm);
-    }
+    // Отладка в сериал (если когда-то подключишь)
+    // Serial.printf("Motor set: Target %d, PWM %d, Channel %d\n", speed, motor->current_pwm, motor->ledc_channel);
 }
 
 /**

@@ -165,22 +165,20 @@ void wifi_init() {
     // 4. Endpoint "/distance" - получить текущее расстояние от датчика
     // Пример: GET http://192.168.X.X/distance
     // Ответ: {"distance": 45.3, "status": "ok"} или {"distance": -1.0, "status": "timeout"}
+    // В wifi_handler.cpp замени обработчик /distance на этот:
     server.on("/distance", HTTP_GET, [](AsyncWebServerRequest *request) {
-        // Получаем текущее расстояние из ультразвукового датчика
         float distance = ultrasonic_get_distance_cm(&distanceSensor);
-        
-        // Формируем JSON ответ вручную (без внешних библиотек)
-        String response = "{\"distance\": ";
-        response += distance;
-        
-        // Добавляем статус: OK или TIMEOUT
-        if (distance < 0) {
-            response += ", \"status\": \"timeout\"}";
-        } else {
-            response += ", \"status\": \"ok\"}";
-        }
-        
-        // Отправляем JSON ответ с корректным типом Content-Type
+    
+    // Формируем расширенный JSON
+        String response = "{";
+        response += "\"distance\": " + String(distance) + ",";
+        response += "\"failsafe\": " + String(isFailsafeActive ? 1 : 0) + ",";
+        response += "\"motorL_pwm\": " + String(motorL.current_pwm) + ",";
+        response += "\"motorR_pwm\": " + String(motorR.current_pwm) + ",";
+        response += "\"targetL\": " + String(motorL.target_speed) + ",";
+        response += "\"uptime\": " + String(millis() / 1000);
+        response += "}";
+    
         request->send(200, "application/json", response);
     });
 
