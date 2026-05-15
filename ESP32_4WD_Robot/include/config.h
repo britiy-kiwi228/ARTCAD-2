@@ -20,21 +20,21 @@
 // Пин для подключения сервопривода
 #define SERVO_SIG 15
 #define SERVO_FREQ 50          // 50 Гц (стандарт для аналоговых серво)
-#define SERVO_RES  10          // 10 бит разрешение (0...1023)
-// Рабочие параметры MG995 (в долях от разрешения 10-бит)
-#define SERVO_MIN_DUTY 26      // ~0.5 мс (0 градусов)
-#define SERVO_MAX_DUTY 123     // ~2.4 мс (180 градусов)
+#define SERVO_RES  16         // 16 бит разрешение (0...65535)
+// Рабочие параметры MG995 (в долях от разрешения 16-бит)
+#define SERVO_MIN_DUTY 819     // ~0.5 мс (0 градусов)
+#define SERVO_MAX_DUTY 3932    // ~2.4 мс (180 градусов)
 
 // Параметры для настройки ШИМ
-#define PWM_FREQ 12000     // 12 kHz (Оптимально для L298N)
+#define PWM_FREQ 1000    // 1000 Hz (Оптимально для L298N)
 #define PWM_RES 8
 // Каналы для ШИМ (LEDC в ESP32)
-// Timer 0: каналы 0-3 @ 12 kHz (система вооружения)
+// Timer 0: каналы 0-3 @ 1000 Hz (система вооружения)
 // Timer 1: каналы 4-7 @ 50 Hz (сервопривод)
-// Timer 2: каналы 8-11 @ 12 kHz (ходовые моторы)
-#define LEDC_CH_L 8      // Timer 2, Channel 8 @ 12 kHz
-#define LEDC_CH_R 9      // Timer 2, Channel 9 @ 12 kHz
-#define LEDC_CH_WEAPON 2 // Timer 0, Channel 2 @ 12 kHz
+// Timer 2: каналы 8-11 @ 1000 Hz (ходовые моторы)
+#define LEDC_CH_L 8      // Timer 2, Channel 8 @ 1000 Hz
+#define LEDC_CH_R 9      // Timer 2, Channel 9 @ 1000 Hz
+#define LEDC_CH_WEAPON 2 // Timer 0, Channel 2 @ 1000 Hz
 #define LEDC_CH_SERVO 4  // Timer 1, Channel 4 @ 50 Hz
 
 // --- Параметры двигателя системы вооружения ---

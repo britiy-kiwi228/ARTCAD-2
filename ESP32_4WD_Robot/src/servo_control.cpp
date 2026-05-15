@@ -13,7 +13,7 @@ void servo_init(Servo_t* servo) {
     
     // ledcSetup(канал, частота_Hz, разрешение_бит)
     // Используем Channel 4 на Timer 1 с 50 Hz для серво
-    // На 10-бит разрешении (1024 уровня) это дает периоды от 0.5 мс до 2.5 мс
+    // На 16-бит разрешении (65536 уровней) это дает периоды от 0.5 мс до 2.5 мс
     ledcSetup(servo->ledc_channel, SERVO_FREQ, SERVO_RES);
     
     ledcAttachPin(servo->pin, servo->ledc_channel);
