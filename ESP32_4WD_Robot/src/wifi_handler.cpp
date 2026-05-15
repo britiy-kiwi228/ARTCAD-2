@@ -87,10 +87,10 @@ void wifi_init() {
         // ===== КРИТИЧНО: Обновляем lastUpdateTime В ПЕРВУЮ ОЧЕРЕДЬ =====
         // Это должно быть ПЕРВОЕ действие при получении команды!
         // Защищаем от race condition отключением прерываний
-        portDISABLE_INTERRUPTS();
+
         lastUpdateTime = millis();
         isFailsafeActive = false;  // Сбрасываем флаг Failsafe (робот на связи!)
-        portENABLE_INTERRUPTS();
+
         
         // Проверяем, прислал ли смартфон параметр 'btn' (направление движения)
         if (request->hasParam("btn")) {
@@ -153,10 +153,10 @@ void wifi_init() {
     // Это критично когда команды ставятся в очередь (throttle) и не отправляются
     server.on("/heartbeat", HTTP_GET, [](AsyncWebServerRequest *request) {
         // Просто обновляем время последней команды
-        portDISABLE_INTERRUPTS();
+        
         lastUpdateTime = millis();
         isFailsafeActive = false;
-        portENABLE_INTERRUPTS();
+
         
         // Отправляем простой ответ ОК
         request->send(200, "text/plain", "OK");
@@ -167,18 +167,10 @@ void wifi_init() {
     // Ответ: {"distance": 45.3, "status": "ok"} или {"distance": -1.0, "status": "timeout"}
     // В wifi_handler.cpp замени обработчик /distance на этот:
     server.on("/distance", HTTP_GET, [](AsyncWebServerRequest *request) {
+        ultrasonic_start_measurement(&distanceSensor); 
+        delayMicroseconds(100);
         float distance = ultrasonic_get_distance_cm(&distanceSensor);
-    
-    // Формируем расширенный JSON
-        String response = "{";
-        response += "\"distance\": " + String(distance) + ",";
-        response += "\"failsafe\": " + String(isFailsafeActive ? 1 : 0) + ",";
-        response += "\"motorL_pwm\": " + String(motorL.current_pwm) + ",";
-        response += "\"motorR_pwm\": " + String(motorR.current_pwm) + ",";
-        response += "\"targetL\": " + String(motorL.target_speed) + ",";
-        response += "\"uptime\": " + String(millis() / 1000);
-        response += "}";
-    
+        String response = "{\"distance\": " + String(distance) + ", \"status\": \"ok\"}";
         request->send(200, "application/json", response);
     });
 
@@ -188,10 +180,10 @@ void wifi_init() {
     // w_angle - угол поворота (0-360 градусов, обычно 45)
     server.on("/fire", HTTP_GET, [](AsyncWebServerRequest *request) {
         // Обновляем таймер failsafe (робот получил команду)
-        portDISABLE_INTERRUPTS();
+        
         lastUpdateTime = millis();
         isFailsafeActive = false;
-        portENABLE_INTERRUPTS();
+        
         
         // Проверяем, прислали ли параметры скорости и угла
         if (request->hasParam("w_speed") && request->hasParam("w_angle")) {

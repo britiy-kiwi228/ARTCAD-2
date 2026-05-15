@@ -13,85 +13,50 @@ void motor_init(Motor_t* motor) {
     motor->current_pwm = 0;
     motor->is_soft_starting = false;
     
+    // 1. Сначала настраиваем IN пины
     pinMode(motor->in1_pin, OUTPUT);
     pinMode(motor->in2_pin, OUTPUT);
     digitalWrite(motor->in1_pin, LOW);
     digitalWrite(motor->in2_pin, LOW);
 
-    // ДЛЯ ТВОЕЙ ВЕРСИИ (2.0.17) НУЖНО ТАК:
-    ledcSetup(motor->ledc_channel, PWM_FREQ, PWM_RES);
+    // 2. Настраиваем PWM пин как выход ПЕРЕД привязкой к ШИМ
+    pinMode(motor->pwm_pin, OUTPUT); 
+    digitalWrite(motor->pwm_pin, LOW);
+
+    // 3. Инициализация ШИМ (для ядра 2.0.17)
+    // Важно: ledcSetup возвращает настроенную частоту, если всё ок
+    double real_freq = ledcSetup(motor->ledc_channel, PWM_FREQ, PWM_RES);
+    
+    if (real_freq == 0) {
+        Serial.printf("!!! PWM ERROR: Channel %d failed to setup!\n", motor->ledc_channel);
+    }
+
     ledcAttachPin(motor->pwm_pin, motor->ledc_channel);
     ledcWrite(motor->ledc_channel, 0);
 
-    Serial.printf("[MOTOR] Channel %d attached to Pin %d\n", motor->ledc_channel, motor->pwm_pin);
+    Serial.printf("[MOTOR] Init OK. Pin:%d Channel:%d\n", motor->pwm_pin, motor->ledc_channel);
 }
 
-/**
- * Установка скорости мотора С ПЛАВНЫМ РАЗГОНОМ (Soft Start protection).
- * 
- * Плавный разгон защищает:
- * - Аккумулятор от ударных токов пуска
- * - Механику от резких рывков
- * - Предохранитель от срабатывания
- */
-// Минимальный порог ШИМ для преодоления инерции L298N
-#define MOTOR_MIN_PWM_THRESHOLD 120 
-
 void motor_set_speed(Motor_t* motor, int speed) {
-    // 1. Ограничение входящего значения (защита от мусора)
-    if (speed > 255)  speed = 255;
-    if (speed < -255) speed = -255;
-
-    // 2. КРИТИЧЕСКАЯ ПРОВЕРКА: Если целевая скорость уже такая же, ничего не делаем.
-    // Это исключает постоянный сброс таймеров при получении пакетов от браузера.
     if (motor->target_speed == speed) return;
-
     motor->target_speed = speed;
 
-    // 3. Обработка полной остановки
     if (speed == 0) {
         motor->current_pwm = 0;
-        motor->is_soft_starting = false;
         digitalWrite(motor->in1_pin, LOW);
         digitalWrite(motor->in2_pin, LOW);
-        ledcWrite(motor->ledc_channel, 0); // Используем КАНАЛ для версии 2.0.17
+        ledcWrite(motor->ledc_channel, 0);
         return;
     }
 
-    // 4. Установка направления (IN пины)
-    // Сначала ставим оба в LOW для безопасности, потом нужное направление
-    digitalWrite(motor->in1_pin, LOW);
-    digitalWrite(motor->in2_pin, LOW);
-    
-    if (speed > 0) {
-        digitalWrite(motor->in1_pin, HIGH);
-        digitalWrite(motor->in2_pin, LOW);
-    } else {
-        digitalWrite(motor->in1_pin, LOW);
-        digitalWrite(motor->in2_pin, HIGH);
-    }
+    // Направление
+    digitalWrite(motor->in1_pin, (speed > 0) ? HIGH : LOW);
+    digitalWrite(motor->in2_pin, (speed < 0) ? HIGH : LOW);
 
-    // 5. Расчет мощности ШИМ
-    int effective_speed = abs(speed);
-
-    // Минимальный порог, чтобы мотор вообще сдвинулся (для L298N)
-    // Если скорость слишком мала, драйвер просто будет греться, но не крутить.
-    if (effective_speed < MOTOR_MIN_PWM_THRESHOLD) {
-        effective_speed = MOTOR_MIN_PWM_THRESHOLD;
-    }
-
-    // 6. ПРИМЕНЕНИЕ (Временно отключаем плавный пуск для теста)
-    // Мы сразу подаем нужную скорость, чтобы исключить ошибки в loop()
-    motor->current_pwm = effective_speed;
-    motor->is_soft_starting = false; // Отключаем логику разгона в loop
-    
-    // ВАЖНО: В твоей версии ядра (2.0.17) ledcWrite работает ТОЛЬКО с КАНАЛОМ
+    // Скорость (сразу, без плавного пуска для теста)
+    motor->current_pwm = abs(speed);
     ledcWrite(motor->ledc_channel, motor->current_pwm);
-
-    // Отладка в сериал (если когда-то подключишь)
-    // Serial.printf("Motor set: Target %d, PWM %d, Channel %d\n", speed, motor->current_pwm, motor->ledc_channel);
 }
-
 /**
  * Обновление плавного разгона.
  * ОБЯЗАТЕЛЬНО вызывать в loop() для всех моторов!

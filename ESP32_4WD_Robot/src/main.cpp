@@ -56,8 +56,7 @@ void setup() {
 
     // --- 7. Физическая инициализация ---
     // Вызываем нашу функцию, которая настроит пины и ШИМ внутри ESP32
-    motor_init(&motorL);
-    motor_init(&motorR);
+    
     servo_init(&servoWeapon);
     weapon_init(&weapon_motor);  // Инициализация катапульты
     ultrasonic_init(&distanceSensor);
@@ -70,6 +69,8 @@ void setup() {
     // Это гарантирует что все системы (WiFi, сервер) уже запущены
     // и heartbeat может отправляться БЕЗ race condition с инициализацией
     delay(100);  // Даем время на стабилизацию
+    motor_init(&motorL);
+    motor_init(&motorR);
     
     lastUltrasonicTime = millis();  // Таймер ультразвукового датчика
     lastUpdateTime = millis();      // Время последней команды (inits heartbeat)
@@ -159,10 +160,10 @@ void loop() {
     
     // Запуск измерения каждые 200 мс
     uint32_t currentTime = millis();
-    if ((uint32_t)(currentTime - lastUltrasonicTime) >= 200) {
+    /*if ((uint32_t)(currentTime - lastUltrasonicTime) >= 200) {
         ultrasonic_start_measurement(&distanceSensor);
         lastUltrasonicTime = currentTime;
-    }
+    }*/
     
     switch (currentState) {
         case STATE_IDLE:

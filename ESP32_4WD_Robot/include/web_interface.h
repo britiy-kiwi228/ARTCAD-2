@@ -621,19 +621,19 @@ const char index_html[] PROGMEM = R"rawliteral(
         window.addEventListener('load', () => {
             statusIndicator.classList.add('online');
             
-            // === АВТООБНОВЛЕНИЕ РАССТОЯНИЯ КАЖДЫЕ 100 МС ===
+            // === АВТООБНОВЛЕНИЕ РАССТОЯНИЯ КАЖДЫЕ 500 МС ===
             // Запускаем первое обновление сразу
             updateDistance();
             
-            // Затем обновляем каждые 100 миллисекунд
-            setInterval(updateDistance, 100);
+            // Затем обновляем каждые 500 миллисекунд
+            setInterval(updateDistance, 500);
             
             // === HEARTBEAT ДЛЯ FAILSAFE ===
-            // Отправляем пустой heartbeat запрос каждые 100мс
+            // Отправляем пустой heartbeat запрос каждые 500мс
             // Это гарантирует, что failsafe на сервере не сработает
             // даже если команды ставятся в очередь (throttle)
             sendHeartbeat();  // Первый heartbeat сразу
-            setInterval(sendHeartbeat, 100);  // Затем каждые 100мс
+            setInterval(sendHeartbeat, 500);  // Затем каждые 500мс
         });
     </script>
 </body>
