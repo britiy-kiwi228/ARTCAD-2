@@ -33,29 +33,29 @@ static void motor_ledc_timers_init() {
  * Принимает адрес структуры Motor_t.
  */
 void motor_init(Motor_t* motor) {
-    // Инициализируем таймеры (один раз)
-    motor_ledc_timers_init();
-    
-    // Отключаем ШИМ перед настройкой
+    // Явно настраиваем таймер ПЕРЕД каналом
+    ledc_timer_config_t timer_conf = {
+        .speed_mode = LEDC_HIGH_SPEED_MODE,
+        .duty_resolution = LEDC_TIMER_8_BIT,
+        .timer_num = LEDC_TIMER_0,
+        .freq_hz = 1000,
+        .clk_cfg = LEDC_AUTO_CLK
+    };
+    ledc_timer_config(&timer_conf);
+
     pinMode(motor->in1_pin, OUTPUT);
     pinMode(motor->in2_pin, OUTPUT);
-    pinMode(motor->pwm_pin, OUTPUT);
     
-    digitalWrite(motor->in1_pin, LOW);
-    digitalWrite(motor->in2_pin, LOW);
-    digitalWrite(motor->pwm_pin, LOW);
-
-    // Настройка канала LEDC
-    ledc_channel_config_t channel_conf = {
+    ledc_channel_config_t ch_conf = {
         .gpio_num = motor->pwm_pin,
-        .speed_mode = MOTOR_SPEED_MODE,
+        .speed_mode = LEDC_HIGH_SPEED_MODE,
         .channel = (ledc_channel_t)motor->ledc_channel,
         .intr_type = LEDC_INTR_DISABLE,
-        .timer_sel = MOTOR_TIMER,
+        .timer_sel = LEDC_TIMER_0,
         .duty = 0,
         .hpoint = 0
     };
-    ledc_channel_config(&channel_conf);
+    ledc_channel_config(&ch_conf);
 }
 
 void motor_set_speed(Motor_t* motor, int speed) {
