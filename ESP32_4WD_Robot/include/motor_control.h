@@ -29,8 +29,11 @@ void motor_init(Motor_t* motor);
 // Функция для установки скорости с плавным разгоном
 void motor_set_speed(Motor_t* motor, int speed);
 
-// Функция для обновления плавного разгона (вызывается в loop)
+// Функция для обновления плавного разгона (теперь будет вызываться в FreeRTOS task)
 void motor_update_soft_start(Motor_t* motor);
+
+// Прототип задачи FreeRTOS для управления моторами
+void motor_control_task(void* pvParameters);
 
 // Получить текущую мощность мотора (0-255)
 int motor_get_current_pwm(Motor_t* motor);

@@ -1,191 +1,171 @@
 #include "wifi_handler.h"
-#include "secrets.h" // Файл с AP_SSID и AP_PASS
-#include "weapon_system.h" // Управление катапультой
+#include "secrets.h"
+#include "weapon_system.h"
 #include <Arduino.h>
 #include <esp_wifi.h>
 
-// Создаем объект сервера на порту 80 (стандарт для HTTP)
+// Создаем объект сервера на порту 80
 AsyncWebServer server(80);
-extern bool isFailsafeActive; // Флаг для отслеживания состояния Failsafe
-extern volatile uint32_t lastUpdateTime; // Время последней полученной команды
-extern WeaponMotor_t weapon_motor; // Доступ к структуре двигателя катапульты
-extern Motor_t motorL; // Левый мотор (для проверки нагрузки)
-extern Motor_t motorR; 
-extern volatile int cmdSpeedL; // Скорость левого мотора
-extern volatile int cmdSpeedR; // Скорость правого мотора
-extern volatile bool cmdChanged; // Флаг, что пришла новая команда для моторов
+
+// ===== ВНЕШНИЕ ПЕРЕМЕННЫЕ (определены в main.cpp) =====
+extern bool isFailsafeActive;
+extern volatile uint32_t lastUpdateTime;
+extern WeaponMotor_t weapon_motor;
+extern Motor_t motorL;
+extern Motor_t motorR;
+
+// ===== АРХИТЕКТУРА "ФЛАГИ И ПЕРЕМЕННЫЕ" =====
+// Эти переменные используются для передачи команд из WiFi обработчиков в main loop.
+// Обработчики ТОЛЬКО меняют эти флаги, НЕ вызывают функции напрямую!
+extern volatile int cmdSpeedL;    // Целевая скорость левого мотора
+extern volatile int cmdSpeedR;    // Целевая скорость правого мотора
+extern volatile bool cmdChanged;  // Флаг: пришла новая команда
+
+// Флаги для сервопривода и катапульты
+extern volatile int cmdServoAngle;    // Целевой угол сервопривода (0-180)
+extern volatile bool cmdServoChanged; // Флаг: пришлась новая команда для серво
+
+extern volatile int cmdWeaponSpeed;   // Целевая скорость катапульты
+extern volatile bool cmdWeaponFire;   // Флаг: выстрелить
+extern volatile bool cmdWeaponChanged;// Флаг: пришлась новая команда для катапульты
 
 void wifi_init() {
-    // ===== ИСПРАВЛЕНИЕ: Переключение с Access Point на режим клиента (STA) =====
-    // Вместо того чтобы создавать собственную WiFi сеть, ESP32 теперь подключается
-    // к домашней сети (hollow512) как обычный клиент.
-    // Преимущество: смартфон и робот находятся в одной сети, можно контролировать со смартфона
+    Serial.println("\n===== WiFi Initialization (STA Mode) =====");
+    Serial.println("SSID: " + String(AP_SSID));
     
-    Serial.println("\n===== WiFi Initialization =====");
-    Serial.println("Connecting to WiFi network: " + String(AP_SSID));
-    
-    // Устанавливаем режим STA (Station/Client) вместо AP (Access Point)
+    // Устанавливаем режим STA (Station/Client)
     WiFi.mode(WIFI_STA);
     
-    // Подключаемся к домашней WiFi сети с учеными данными из secrets.h
-    WiFi.begin(AP_SSID, AP_PASS);
-    WiFi.setSleep(false); 
+    // КРИТИЧНО: Отключаем sleep режим WiFi для стабильности
+    WiFi.setSleep(false);
     
-    // Снижаем мощность передатчика (чтобы не было помех на моторы)
-    // Иногда WiFi "давит" сигнал на близлежащих дорожках (GPIO 32, 33)
+    // Снижаем мощность передатчика для снижения помех на GPIO 32/33
     WiFi.setTxPower(WIFI_POWER_11dBm);
     
-    // Ждем подключения с таймаутом 20 секунд (40 попыток по 500 мс)
-    int attempts = 0;
-    constexpr int MAX_ATTEMPTS = 40;
+    // Подключаемся к домашней сети
+    WiFi.begin(AP_SSID, AP_PASS);
     
-    while (WiFi.status() != WL_CONNECTED && attempts < MAX_ATTEMPTS) {
+    // Ждем подключения (максимум 20 секунд)
+    int attempts = 0;
+    while (WiFi.status() != WL_CONNECTED && attempts < 40) {
         delay(500);
         Serial.print(".");
         attempts++;
     }
+    Serial.println();
     
-    Serial.println(); // Новая строка после точек прогресса
-    
-    // Проверяем результат подключения
     if (WiFi.status() == WL_CONNECTED) {
-        Serial.println("\n█████████████████████████████████████████");
-        Serial.println("✓ WiFi Connected Successfully!");
-        Serial.println("█████████████████████████████████████████");
-        
-        IPAddress localIP = WiFi.localIP();
-        Serial.println("\n>>> ROBOT IP ADDRESS <<<");
-        Serial.print("    http://");
-        Serial.print(localIP);
-        Serial.println("/");
-        Serial.println("\nOpen this in your browser on smartphone:");
-        Serial.print("    http://");
-        Serial.print(localIP);
-        Serial.println("/distance");
-        
-        Serial.println("\nNetwork Details:");
-        Serial.print("  Local IP:  ");
-        Serial.println(localIP);
-        Serial.print("  Gateway:   ");
-        Serial.println(WiFi.gatewayIP());
-        Serial.print("  MAC:       ");
-        Serial.println(WiFi.macAddress());
-        Serial.println("█████████████████████████████████████████\n");
+        Serial.println("\n✓ WiFi Connected!");
+        IPAddress ip = WiFi.localIP();
+        Serial.print("IP: http://");
+        Serial.println(ip);
     } else {
-        Serial.println("\n✗ WiFi Connection Failed!");
-        Serial.println("Please check SSID and password in secrets.h");
-        Serial.println("Continuing without WiFi...\n");
+        Serial.println("\n✗ WiFi Connection Failed");
     }
 
-    // ===== ВЕХОВОЕ МЕНЮ ВЕБА: Endpoints (маршруты) =====
+    // ===== ЭНДПОИНТЫ =====
     
-    // 1. Обработчик корневого пути "/" - возвращает HTML интерфейс
-    // Когда ты заходишь на http://[IP_РОБОТА]/ в браузер смартфона
-    // Клиент получит красивую HTML страницу управления роботом
+    // GET / - HTML интерфейс
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-        // Отправляем HTML страницу из PROGMEM с типом Content-Type: text/html
         request->send_P(200, "text/html", index_html);
     });
 
-    // 2. Endpoint "/move" - команда управления моторами и сервом через кнопки
-    // Пример запроса: http://192.168.X.X/move?btn=forward&speed=128
-    // btn - направление: forward, backward, left, right, stop
-    // speed - скорость моторов (0-255)
-    // s - угол сервопривода оружия (0...180) - опционально
+    // GET /move - команды движения (флаги вместо прямых вызовов!)
+    // Параметры: btn=forward|backward|left|right|stop&speed=0-255
     server.on("/move", HTTP_GET, [](AsyncWebServerRequest *request) {
-    lastUpdateTime = millis();
-    isFailsafeActive = false;
-
-    if (request->hasParam("btn")) {
-        String btn = request->getParam("btn")->value();
-        int speed = request->hasParam("speed") ? request->getParam("speed")->value().toInt() : 128;
-
-        if (btn == "forward")  { cmdSpeedL = speed;  cmdSpeedR = speed; }
-        else if (btn == "backward") { cmdSpeedL = -speed; cmdSpeedR = -speed; }
-        else if (btn == "left")     { cmdSpeedL = (speed*3/10); cmdSpeedR = speed; }
-        else if (btn == "right")    { cmdSpeedL = speed; cmdSpeedR = (speed*3/10); }
-        else if (btn == "stop")     { cmdSpeedL = 0; cmdSpeedR = 0; }
-        
-        cmdChanged = true; // Ставим флаг, что пришла новая команда
-    }
-    request->send(200, "text/plain", "OK");
-});
-
-    // 3. Endpoint "/heartbeat" - пустой запрос для обновления таймера failsafe
-    // Отправляется каждые 100мс из JavaScript, чтобы failsafe не срабатывал
-    // Это критично когда команды ставятся в очередь (throttle) и не отправляются
-    server.on("/heartbeat", HTTP_GET, [](AsyncWebServerRequest *request) {
-        // Просто обновляем время последней команды
-        
         lastUpdateTime = millis();
         isFailsafeActive = false;
 
-        
-        // Отправляем простой ответ ОК
+        if (request->hasParam("btn")) {
+            String btn = request->getParam("btn")->value();
+            int speed = request->hasParam("speed") ? request->getParam("speed")->value().toInt() : 128;
+            speed = constrain(speed, 0, 255);
+
+            if (btn == "forward") {
+                cmdSpeedL = speed;
+                cmdSpeedR = speed;
+            } else if (btn == "backward") {
+                cmdSpeedL = -speed;
+                cmdSpeedR = -speed;
+            } else if (btn == "left") {
+                cmdSpeedL = speed / 3;
+                cmdSpeedR = speed;
+            } else if (btn == "right") {
+                cmdSpeedL = speed;
+                cmdSpeedR = speed / 3;
+            } else if (btn == "stop") {
+                cmdSpeedL = 0;
+                cmdSpeedR = 0;
+            }
+            
+            cmdChanged = true;  // Флаг для main loop
+        }
         request->send(200, "text/plain", "OK");
     });
 
-    // 4. Endpoint "/distance" - получить текущее расстояние от датчика
-    // Пример: GET http://192.168.X.X/distance
-    // Ответ: {"distance": 45.3, "status": "ok"} или {"distance": -1.0, "status": "timeout"}
-    
-    /*server.on("/distance", HTTP_GET, [](AsyncWebServerRequest *request) {
-        ultrasonic_start_measurement(&distanceSensor); 
-        delayMicroseconds(100);
-        float distance = ultrasonic_get_distance_cm(&distanceSensor);
-        String response = "{\"distance\": " + String(distance) + ", \"status\": \"ok\"}";
-        request->send(200, "application/json", response);
-    });*/
-
-    // 5. Endpoint "/fire" - команда для системы вооружения (выстрел катапульты)
-    // Пример запроса: http://192.168.X.X/fire?w_speed=200&w_angle=45
-    // w_speed - скорость мотора (1-255)
-    // w_angle - угол поворота (0-360 градусов, обычно 45)
-    server.on("/fire", HTTP_GET, [](AsyncWebServerRequest *request) {
-        // Обновляем таймер failsafe (робот получил команду)
-        
+    // GET /heartbeat - сигнал жизни (предотвращает failsafe)
+    server.on("/heartbeat", HTTP_GET, [](AsyncWebServerRequest *request) {
         lastUpdateTime = millis();
         isFailsafeActive = false;
-        
-        
-        // Проверяем, прислали ли параметры скорости и угла
-        if (request->hasParam("w_speed") && request->hasParam("w_angle")) {
-            int weaponSpeed = request->getParam("w_speed")->value().toInt();
-            int weaponAngle = request->getParam("w_angle")->value().toInt();
-            
-            // Валидация скорости (1...255)
-            if (weaponSpeed > 0 && weaponSpeed <= 255) {
-                // Валидация угла (0...360)
-                if (weaponAngle >= 0 && weaponAngle <= 360) {
-                    // ===== ЛОГИКА ВЫСТРЕЛА С ЗАЩИТОЙ =====
-                    // Получаем текущую нагрузку ходовых моторов (%)
-                    uint8_t loadLeft = motor_get_load_percent(&motorL);
-                    uint8_t loadRight = motor_get_load_percent(&motorR);
-                    
-                    // Пытаемся выстрелить (функция проверит защиту)
-                    bool fireSuccess = weapon_rotate_to_angle(&weapon_motor, (float)weaponAngle, weaponSpeed,
-                                                              loadLeft, loadRight);
-                    
-                    if (fireSuccess) {
-                        // Выстрел успешно инициирован
-                        request->send(200, "text/plain", "FIRE");
-                    } else {
-                        // Выстрел заблокирован защитой (высокая нагрузка на моторы)
-                        request->send(409, "text/plain", "BLOCKED_HIGH_LOAD");
-                    }
-                } else {
-                    request->send(400, "text/plain", "Invalid angle (0-360)");
-                }
-            } else {
-                request->send(400, "text/plain", "Invalid speed (1-255)");
-            }
-        } else {
-            request->send(400, "text/plain", "Missing w_speed or w_angle parameter");
-        }
+        request->send(200, "text/plain", "OK");
     });
 
-    // 6. Запуск асинхронного веб-сервера на порту 80
-    // Сервер будет слушать входящие HTTP запросы
-    // Это не блокирует выполнение loop() - работает асинхронно!
+    // GET /distance - текущее расстояние от датчика
+    server.on("/distance", HTTP_GET, [](AsyncWebServerRequest *request) {
+        // Запускаем измерение расстояния
+        ultrasonic_start_measurement(&distanceSensor);
+        float distance = ultrasonic_get_distance_cm(&distanceSensor);
+        
+        String status = (distance > 0) ? "ok" : "timeout";
+        String response = "{\"distance\": " + String(distance, 1) + ", \"status\": \"" + status + "\"}";
+        
+        request->send(200, "application/json", response);
+    });
+
+    // GET /servo - команда для сервопривода
+    // Параметры: angle=0-180
+    server.on("/servo", HTTP_GET, [](AsyncWebServerRequest *request) {
+        lastUpdateTime = millis();
+        isFailsafeActive = false;
+
+        if (request->hasParam("angle")) {
+            int angle = request->getParam("angle")->value().toInt();
+            cmdServoAngle = constrain(angle, 0, 180);
+            cmdServoChanged = true;
+        }
+        request->send(200, "text/plain", "OK");
+    });
+
+    // GET /fire - команда выстрела катапультой (ставит флаг, не вызывает функции!)
+    // Параметры: speed=0-255&angle=0-360
+    server.on("/fire", HTTP_GET, [](AsyncWebServerRequest *request) {
+        lastUpdateTime = millis();
+        isFailsafeActive = false;
+
+        if (request->hasParam("speed") && request->hasParam("angle")) {
+            int speed = request->getParam("speed")->value().toInt();
+            int angle = request->getParam("angle")->value().toInt();
+            
+            cmdWeaponSpeed = constrain(speed, 0, 255);
+            cmdWeaponSpeed = constrain(angle, 0, 360);
+            cmdWeaponFire = true;
+            cmdWeaponChanged = true;
+        }
+        request->send(200, "text/plain", "OK");
+    });
+
+    // GET /status - статус робота (JSON)
+    server.on("/status", HTTP_GET, [](AsyncWebServerRequest *request) {
+        String json = "{";
+        json += "\"motorL_load\": " + String(motor_get_load_percent(&motorL));
+        json += ", \"motorR_load\": " + String(motor_get_load_percent(&motorR));
+        json += ", \"weapon_speed\": " + String(weapon_motor.current_speed);
+        json += ", \"wifi_signal\": " + String(WiFi.RSSI());
+        json += "}";
+        request->send(200, "application/json", json);
+    });
+
+    // Запуск сервера
     server.begin();
+    Serial.println("Web server started on port 80");
 }

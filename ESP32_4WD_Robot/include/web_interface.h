@@ -439,7 +439,12 @@ const char index_html[] PROGMEM = R"rawliteral(
         }
 
         // === ФУНКЦИЯ: Обновление расстояния от датчика США (НОВОЕ) ===
+        let lastDistanceTime = 0;
         async function updateDistance() {
+            const now = Date.now();
+            if (now - lastDistanceTime < 800) return; // Throttle: не чаще чем раз в 800 мс
+            lastDistanceTime = now;
+
             try {
                 const response = await fetch('/distance');
                 if (response.ok) {
@@ -493,8 +498,8 @@ const char index_html[] PROGMEM = R"rawliteral(
         servoSlider.addEventListener('input', (e) => {
             currentServo = parseInt(e.target.value);
             document.getElementById('servoValue').textContent = currentServo;
-            // Отправляем команду для обновления угла серво (без движения, используем последнюю команду)
-            sendCommand('stop');
+            // Отправляем команду обновления серво (без блокировки других команд)
+            fetch(`/servo?angle=${currentServo}`).catch(() => {});
         });
 
         // === ОБНОВЛЕНИЕ СЛАЙДЕРА СКОРОСТИ КАТАПУЛЬТЫ ===
@@ -536,104 +541,89 @@ const char index_html[] PROGMEM = R"rawliteral(
         });
 
         // === ФУНКЦИЯ: Отправка команды на ESP32 (с кнопками управления) ===
+        // Throttle: минимум 50мс между командами для избежания перегрузки сервера
+        let lastCommandTime = 0;
         async function sendCommand(button) {
             const now = Date.now();
+            if (now - lastCommandTime < 50) return; // Не чаще 50мс
+            lastCommandTime = now;
             
-            // Получаем текущую скорость из ползунка
             const currentSpeed = parseInt(speedSlider.value);
-            
-            // Формируем URL с параметром btn, скоростью и углом серво
-            const url = `/move?btn=${button}&speed=${currentSpeed}&s=${Math.round(currentServo)}`;
+            const url = `/move?btn=${button}&speed=${currentSpeed}`;
             
             try {
                 const response = await fetch(url);
-                
                 if (response.ok) {
-                    statusText.textContent = `✓ ${button.toUpperCase()} | Скорость: ${currentSpeed}`;
+                    statusText.textContent = `✓ ${button.toUpperCase()} | Speed: ${currentSpeed}`;
                     statusIndicator.classList.add('online');
                 } else {
-                    statusText.textContent = `✗ Ошибка: ${response.status}`;
+                    statusText.textContent = `✗ Error: ${response.status}`;
                     statusIndicator.classList.remove('online');
                 }
             } catch (error) {
-                statusText.textContent = `✗ Нет соединения`;
+                statusText.textContent = `✗ No connection`;
                 statusIndicator.classList.remove('online');
             }
         }
 
         // === ФУНКЦИЯ: Отправка команды ВЫСТРЕЛА на ESP32 ===
         async function sendFire(weaponSpeed, weaponAngle) {
-            // Блокируем повторный выстрел, если уже вращаемся
             if (weaponRotating) {
-                statusText.textContent = `⚠ Катапульта уже работает!`;
+                statusText.textContent = `⚠ Catapult is still working!`;
                 return;
             }
 
             weaponRotating = true;
             fireBtn.disabled = true;
-            fireBtn.textContent = '⏳ Выстрел...';
+            fireBtn.textContent = '⏳ Firing...';
 
             try {
-                // Отправляем команду выстрела
-                // Параметры: w_speed (скорость), w_angle (угол)
-                const response = await fetch(`/fire?w_speed=${Math.round(weaponSpeed)}&w_angle=${Math.round(weaponAngle)}`);
+                const response = await fetch(`/fire?speed=${Math.round(weaponSpeed)}&angle=${Math.round(weaponAngle)}`);
                 
                 if (response.ok) {
-                    // Выстрел успешно инициирован
-                    statusText.textContent = `💥 ВЫСТРЕЛ! Скорость: ${Math.round(weaponSpeed)}, Угол: ${Math.round(weaponAngle)}°`;
+                    statusText.textContent = `💥 FIRE! Speed: ${Math.round(weaponSpeed)}, Angle: ${Math.round(weaponAngle)}°`;
                     
-                    // Вычисляем время вращения (205 RPM = 292.68мс за 360°)
-                    // Время = (360° / RPM) * 60000мс = (360 / 205) * 60000 ≈ 292.68мс за полный оборот
-                    // Для 45° поворота = (45 / 360) * 292.68 ≈ 36.585мс
-                    // Добавляем буфер для торможения = 300мс
-                    const rotationTime = ((weaponAngle / 360) * (60000 / 205)) + 300;  // мс
+                    // Расчет времени вращения (205 RPM)
+                    const rotationTime = ((weaponAngle / 360) * (60000 / 205)) + 400;
                     
-                    // Ждём завершения вращения
                     setTimeout(() => {
                         fireBtn.disabled = false;
-                        fireBtn.textContent = '🔫 ВЫСТРЕЛ';
+                        fireBtn.textContent = '🔫 FIRE';
                         weaponRotating = false;
-                        statusText.textContent = `✓ Выстрел завершён`;
+                        statusText.textContent = `✓ Fire completed`;
                     }, rotationTime);
                 } else if (response.status === 409) {
-                    // === ЗАЩИТА: Выстрел заблокирован из-за высокой нагрузки ===
-                    statusText.textContent = `⚠️ ВЫСТРЕЛ ЗАБЛОКИРОВАН! Снизьте скорость моторов (ходовые моторы перегружены)`;
+                    statusText.textContent = `⚠️ FIRE BLOCKED! Drive motors overloaded`;
                     fireBtn.disabled = false;
-                    fireBtn.textContent = '🔫 ВЫСТРЕЛ';
+                    fireBtn.textContent = '🔫 FIRE';
                     weaponRotating = false;
                 } else {
-                    // Другая ошибка
-                    statusText.textContent = `✗ Ошибка выстрела: ${response.status}`;
+                    statusText.textContent = `✗ Fire error: ${response.status}`;
                     fireBtn.disabled = false;
-                    fireBtn.textContent = '🔫 ВЫСТРЕЛ';
+                    fireBtn.textContent = '🔫 FIRE';
                     weaponRotating = false;
                 }
             } catch (error) {
-                statusText.textContent = `✗ Нет соединения с катапультой`;
+                statusText.textContent = `✗ No connection`;
                 fireBtn.disabled = false;
-                fireBtn.textContent = '🔫 ВЫСТРЕЛ';
+                fireBtn.textContent = '🔫 FIRE';
                 weaponRotating = false;
             }
         }
 
         // === ИНИЦИАЛИЗАЦИЯ ===
-        // При загрузке страницы инициализируем интерфейс
         window.addEventListener('load', () => {
             statusIndicator.classList.add('online');
             
-            // === АВТООБНОВЛЕНИЕ РАССТОЯНИЯ КАЖДЫЕ 500 МС ===
-            // Запускаем первое обновление сразу
+            // === АВТООБНОВЛЕНИЕ РАССТОЯНИЯ КАЖДЫЕ 1000 МС (вместо 100мс) ===
+            // Снижено с 100мс до 1000мс для снижения нагрузки на WiFi
             updateDistance();
+            setInterval(updateDistance, 1000);
             
-            // Затем обновляем каждые 500 миллисекунд
-            setInterval(updateDistance, 500);
-            
-            // === HEARTBEAT ДЛЯ FAILSAFE ===
-            // Отправляем пустой heartbeat запрос каждые 500мс
-            // Это гарантирует, что failsafe на сервере не сработает
-            // даже если команды ставятся в очередь (throttle)
-            sendHeartbeat();  // Первый heartbeat сразу
-            setInterval(sendHeartbeat, 500);  // Затем каждые 500мс
+            // === HEARTBEAT КАЖДЫЕ 500 МС ===
+            // Это достаточно часто чтобы предотвратить failsafe (timeout 500мс)
+            sendHeartbeat();
+            setInterval(sendHeartbeat, 500);
         });
     </script>
 </body>

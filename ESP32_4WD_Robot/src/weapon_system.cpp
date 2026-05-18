@@ -2,6 +2,30 @@
 #include <Arduino.h>
 #include <driver/ledc.h>
 #include <stdlib.h>
+
+// Глобальный флаг для инициализации таймера катапульты (один раз)
+static bool weapon_timer_initialized = false;
+
+/**
+ * Инициализация таймера LEDC для катапульты один раз
+ * Таймер 1 @ 1000 Hz для мотора катапульты
+ */
+static void weapon_ledc_timer_init() {
+    if (weapon_timer_initialized) return;
+    
+    // Настройка таймера 1 для катапульты (1000 Hz, HIGH SPEED)
+    ledc_timer_config_t timer_conf = {
+        .speed_mode = WEAPON_SPEED_MODE,
+        .duty_resolution = (ledc_timer_bit_t)WEAPON_PWM_RES,
+        .timer_num = WEAPON_TIMER,
+        .freq_hz = WEAPON_PWM_FREQ,
+        .clk_cfg = LEDC_AUTO_CLK
+    };
+    ledc_timer_config(&timer_conf);
+    
+    weapon_timer_initialized = true;
+}
+
 /**
  * Initialize weapon system (L298N driver + motor).
  * 
@@ -15,6 +39,9 @@ void weapon_init(WeaponMotor_t* weapon) {
     if (!weapon) {
         return;
     }
+
+    // Инициализируем таймер (один раз)
+    weapon_ledc_timer_init();
 
     // Initialize parameters if not already set
     if (weapon->motor_rpm == 0) {
@@ -43,9 +70,16 @@ void weapon_init(WeaponMotor_t* weapon) {
     pinMode(weapon->en_pin, OUTPUT);
     
     // Configure PWM via LEDC on EN pin
-    ledcSetup(weapon->ledc_channel, PWM_FREQ, PWM_RES);
-    ledcAttachPin(weapon->en_pin, weapon->ledc_channel);
-    ledcWrite(weapon->ledc_channel, 0);
+    ledc_channel_config_t channel_conf = {
+        .gpio_num = weapon->en_pin,
+        .speed_mode = WEAPON_SPEED_MODE,
+        .channel = (ledc_channel_t)weapon->ledc_channel,
+        .intr_type = LEDC_INTR_DISABLE,
+        .timer_sel = WEAPON_TIMER,
+        .duty = 0,
+        .hpoint = 0
+    };
+    ledc_channel_config(&channel_conf);
 }
 
 /**
@@ -66,8 +100,7 @@ void weapon_set_speed(WeaponMotor_t* weapon, int speed) {
     }
 
     // Limit speed to [-255, 255]
-    if (speed > 255)  speed = 255;
-    if (speed < -255) speed = -255;
+    speed = constrain(speed, -255, 255);
 
     // Save current speed
     weapon->current_speed = speed;
@@ -95,7 +128,8 @@ void weapon_set_speed(WeaponMotor_t* weapon, int speed) {
     }
     
     weapon->current_pwm = pwm_value;
-    ledcWrite(weapon->ledc_channel, pwm_value);
+    ledc_set_duty(WEAPON_SPEED_MODE, (ledc_channel_t)weapon->ledc_channel, pwm_value);
+    ledc_update_duty(WEAPON_SPEED_MODE, (ledc_channel_t)weapon->ledc_channel);
 }
 
 /**

@@ -1,44 +1,90 @@
 #include "servo_control.h"
 #include "config.h"
 #include <Arduino.h>
+#include "driver/ledc.h"
 
+// Глобальный флаг для инициализации таймера сервопривода (один раз)
+static bool servo_timer_initialized = false;
+
+/**
+ * Инициализация таймера LEDC для сервопривода один раз
+ * Таймер 2 @ 50 Hz для сервопривода MG995
+ */
+static void servo_ledc_timer_init() {
+    if (servo_timer_initialized) return;
+    
+    // Настройка таймера 2 для сервопривода (50 Hz, HIGH SPEED, 16-bit)
+    ledc_timer_config_t timer_conf = {
+        .speed_mode = SERVO_SPEED_MODE,
+        .duty_resolution = (ledc_timer_bit_t)SERVO_PWM_RES,
+        .timer_num = SERVO_TIMER,
+        .freq_hz = SERVO_PWM_FREQ,
+        .clk_cfg = LEDC_AUTO_CLK
+    };
+    ledc_timer_config(&timer_conf);
+    
+    servo_timer_initialized = true;
+}
+
+/**
+ * Инициализация сервопривода
+ * @param servo Указатель на структуру Servo_t
+ */
 void servo_init(Servo_t* servo) {
-    // Настройка пина управления как OUTPUT
+    if (!servo) return;
+    
+    // Инициализируем таймер (один раз)
+    servo_ledc_timer_init();
+    
+    // Устанавливаем пин в режим OUTPUT
     pinMode(servo->pin, OUTPUT);
-
-    // ===== КРИТИЧНОЕ ИСПРАВЛЕНИЕ: Использовать правильную частоту для серво =====
-    // Серво требует 50 Hz, а моторы работают на 5 kHz
-    // Поэтому используем отдельный LEDC таймер (Timer 1) с 50 Hz частотой
-    // Это предотвращает конфликты и обеспечивает стабильный сигнал для серво
     
-    // ledcSetup(канал, частота_Hz, разрешение_бит)
-    // Используем Channel 4 на Timer 1 с 50 Hz для серво
-    // На 16-бит разрешении (65536 уровней) это дает периоды от 0.5 мс до 2.5 мс
-    ledcSetup(servo->ledc_channel, SERVO_FREQ, SERVO_RES);
+    // Настройка канала LEDC для сервопривода
+    ledc_channel_config_t channel_conf = {
+        .gpio_num = servo->pin,
+        .speed_mode = SERVO_SPEED_MODE,
+        .channel = (ledc_channel_t)servo->ledc_channel,
+        .intr_type = LEDC_INTR_DISABLE,
+        .timer_sel = SERVO_TIMER,
+        .duty = SERVO_MIN_DUTY,  // Начальная позиция: 0 градусов
+        .hpoint = 0
+    };
+    ledc_channel_config(&channel_conf);
     
-    ledcAttachPin(servo->pin, servo->ledc_channel);
-
-    // Устанавливаем начальный угол в 90 градусов (нейтральное положение)
-    servo_set_angle(servo, 90);
-
-    // ОТЛАДКА: Вывод информации о инициализации серво
-    Serial.print("[SERVO INIT] Channel: ");
-    Serial.print(servo->ledc_channel);
-    Serial.print(" | Pin: ");
+    Serial.print("[SERVO INIT] Pin: ");
     Serial.print(servo->pin);
     Serial.print(" | Freq: ");
-    Serial.print(SERVO_FREQ);
+    Serial.print(SERVO_PWM_FREQ);
     Serial.println(" Hz");
 }
 
+/**
+ * Установка угла поворота сервопривода (0...180 градусов)
+ * 
+ * @param servo Указатель на структуру Servo_t
+ * @param angle Угол в градусах (0...180)
+ * 
+ * Формула расчета duty cycle:
+ * duty = MIN_DUTY + (angle / 180.0) * (MAX_DUTY - MIN_DUTY)
+ * 
+ * МГ995 требует:
+ * - 0.5 мс (1% от 50мс) = 0 градусов
+ * - 2.4 мс (4.8% от 50мс) = 180 градусов
+ * 
+ * При 16-бит разрешении (0-65535):
+ * - 0.5 мс: 819 (0.5ms / 20ms * 65535)
+ * - 2.4 мс: 3932 (2.4ms / 20ms * 65535)
+ */
 void servo_set_angle(Servo_t* servo, int angle) {
-    // Ограничиваем угол от 0 до 180 градусов
-    if (angle < 0) angle = 0;
-    if (angle > 180) angle = 180;
-
-    // Вычисляем значение ШИМ для заданного угла
-    int duty = map(angle, 0, 180, SERVO_MIN_DUTY, SERVO_MAX_DUTY);
-
-    // Устанавливаем ШИМ на соответствующий канал
-    ledcWrite(servo->ledc_channel, duty);
+    if (!servo) return;
+    
+    // Клипируем угол в диапазон [0, 180]
+    angle = constrain(angle, 0, 180);
+    
+    // Вычисляем duty cycle через линейную интерполяцию
+    uint32_t duty = SERVO_MIN_DUTY + (angle * (SERVO_MAX_DUTY - SERVO_MIN_DUTY)) / 180;
+    
+    // Устанавливаем duty cycle для канала LEDC
+    ledc_set_duty(SERVO_SPEED_MODE, (ledc_channel_t)servo->ledc_channel, duty);
+    ledc_update_duty(SERVO_SPEED_MODE, (ledc_channel_t)servo->ledc_channel);
 }

@@ -1,5 +1,8 @@
 #ifndef CONFIG_H // Защита от повторного включения 
 #define CONFIG_H
+
+#include "driver/ledc.h"
+
 // --- Пины для подключения ходовой части (L298N) ---
 // Мотор 1 (Левый): ENA (PWM) = 32, INA = 25, INB = 26
 #define MOTOR_L_PWM 32
@@ -20,26 +23,43 @@
 // Пин для подключения сервопривода
 #define SERVO_SIG 15
 #define SERVO_FREQ 50          // 50 Гц (стандарт для аналоговых серво)
-#define SERVO_RES  16         // 16 бит разрешение (0...65535)
+#define SERVO_RES  16          // 16 бит разрешение (0...65535)
 // Рабочие параметры MG995 (в долях от разрешения 16-бит)
 #define SERVO_MIN_DUTY 819     // ~0.5 мс (0 градусов)
 #define SERVO_MAX_DUTY 3932    // ~2.4 мс (180 градусов)
 
-// Параметры для настройки ШИМ
-#define PWM_FREQ 500    // 1000 Hz (Оптимально для L298N)
-#define PWM_RES 8
-// Каналы для ШИМ (LEDC в ESP32)
-// Timer 0: каналы 0-3 @ 1000 Hz (система вооружения)
-// Timer 1: каналы 4-7 @ 50 Hz (сервопривод)
-// Timer 2: каналы 8-11 @ 1000 Hz (ходовые моторы)
-#define LEDC_CH_L 2     // Timer 2, Channel 8 @ 1000 Hz
-#define LEDC_CH_R 3     // Timer 2, Channel 9 @ 1000 Hz
-#define LEDC_CH_WEAPON 0 // Timer 0, Channel 2 @ 1000 Hz
-#define LEDC_CH_SERVO 5 // Timer 1, Channel 4 @ 50 Hz
+// === ПРАВИЛЬНОЕ РАСПРЕДЕЛЕНИЕ ТАЙМЕРОВ ===
+// Таймер 0 (HIGH SPEED @ 1000 Hz): Ходовые моторы (левый + правый) - LEDC_CH0, LEDC_CH1
+// Таймер 1 (HIGH SPEED @ 1000 Hz): Катапульта - LEDC_CH2
+// Таймер 2 (HIGH SPEED @ 50 Hz): Сервопривод - LEDC_CH3
 
-// Каналы для SigmaDelta (вместо LEDC)
-#define SD_CH_L 0
-#define SD_CH_R 1
+// Параметры PWM для моторов
+#define MOTOR_PWM_FREQ 1000    // 1000 Hz (Оптимально для L298N)
+#define MOTOR_PWM_RES 8        // 8 бит разрешение (0-255)
+#define MOTOR_TIMER LEDC_TIMER_0
+#define MOTOR_SPEED_MODE LEDC_HIGH_SPEED_MODE
+
+// LEDC каналы для ходовых моторов
+#define LEDC_CH_L LEDC_CHANNEL_0  // Левый мотор
+#define LEDC_CH_R LEDC_CHANNEL_1  // Правый мотор
+
+// Параметры PWM для катапульты
+#define WEAPON_PWM_FREQ 1000   // 1000 Hz
+#define WEAPON_PWM_RES 8       // 8 бит
+#define WEAPON_TIMER LEDC_TIMER_1
+#define WEAPON_SPEED_MODE LEDC_HIGH_SPEED_MODE
+
+// LEDC канал для катапульты
+#define LEDC_CH_WEAPON LEDC_CHANNEL_2
+
+// Параметры PWM для сервопривода
+#define SERVO_PWM_FREQ 50      // 50 Hz (стандарт)
+#define SERVO_PWM_RES 16       // 16 бит разрешение
+#define SERVO_TIMER LEDC_TIMER_2
+#define SERVO_SPEED_MODE LEDC_HIGH_SPEED_MODE
+
+// LEDC канал для сервопривода
+#define LEDC_CH_SERVO LEDC_CHANNEL_3
 
 // --- Параметры двигателя системы вооружения ---
 #define WEAPON_MOTOR_RPM 205           // Обороты в минуту (JGA25-370B)
