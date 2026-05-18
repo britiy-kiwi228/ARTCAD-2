@@ -2,41 +2,29 @@
 #include "secrets.h"
 #include "weapon_system.h"
 #include <Arduino.h>
-#include <esp_wifi.h>
 
 AsyncWebServer server(80);
 
-extern bool isFailsafeActive;
+// Ссылки на внешние переменные
 extern volatile uint32_t lastUpdateTime;
-extern WeaponMotor_t weapon_motor;
-extern Motor_t motorL;
-extern Motor_t motorR;
-
-extern volatile int cmdSpeedL;
-extern volatile int cmdSpeedR;
+extern Ultrasonic_t distanceSensor;
+extern volatile int cmdSpeedL, cmdSpeedR;
 extern volatile bool cmdChanged;
 extern volatile int cmdServoAngle;
 extern volatile bool cmdServoChanged;
-extern volatile int cmdWeaponSpeed;
-extern volatile int cmdWeaponAngle; // Добавлено
-extern volatile bool cmdWeaponFire;
-extern volatile bool cmdWeaponChanged;
+extern volatile int cmdWeaponSpeed, cmdWeaponAngle;
+extern volatile bool cmdWeaponFire, cmdWeaponChanged;
 
 void wifi_init() {
     WiFi.mode(WIFI_STA);
-    WiFi.setSleep(false); // КРИТИЧНО для мгновенного отклика
+    WiFi.setSleep(false); // Отключаем энергосбережение Wi-Fi
     WiFi.begin(AP_SSID, AP_PASS);
     
-    Serial.print("Connecting to WiFi");
+    // Ждем подключения без блокировки надолго
     int attempts = 0;
-    while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+    while (WiFi.status() != WL_CONNECTED && attempts < 15) {
         delay(500);
-        Serial.print(".");
         attempts++;
-    }
-
-    if (WiFi.status() == WL_CONNECTED) {
-        Serial.println("\n✓ Connected! IP: " + WiFi.localIP().toString());
     }
 
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -47,16 +35,16 @@ void wifi_init() {
         lastUpdateTime = millis();
         if (request->hasParam("btn")) {
             String btn = request->getParam("btn")->value();
-            int speed = request->hasParam("speed") ? request->getParam("speed")->value().toInt() : 150;
+            int spd = request->hasParam("speed") ? request->getParam("speed")->value().toInt() : 150;
             
-            if (btn == "forward") { cmdSpeedL = speed; cmdSpeedR = speed; }
-            else if (btn == "backward") { cmdSpeedL = -speed; cmdSpeedR = -speed; }
+            if (btn == "forward") { cmdSpeedL = spd; cmdSpeedR = spd; }
+            else if (btn == "backward") { cmdSpeedL = -spd; cmdSpeedR = -spd; }
             else if (btn == "left") { cmdSpeedL = -MOTOR_TURN_SPEED; cmdSpeedR = MOTOR_TURN_SPEED; }
             else if (btn == "right") { cmdSpeedL = MOTOR_TURN_SPEED; cmdSpeedR = -MOTOR_TURN_SPEED; }
             else { cmdSpeedL = 0; cmdSpeedR = 0; }
             cmdChanged = true;
         }
-        request->send(200, "text/plain", "OK");
+        request->send(200, "text/plain", "OK"); // Мгновенный ответ
     });
 
     server.on("/heartbeat", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -65,17 +53,17 @@ void wifi_init() {
     });
 
     server.on("/distance", HTTP_GET, [](AsyncWebServerRequest *request) {
-        // Мы не запускаем измерение здесь, оно идет в loop()
-        // Здесь только отдаем ПОСЛЕДНЕЕ готовое значение
-        float dist = distanceSensor.last_distance_cm;
-        String response = "{\"distance\": " + String(dist, 1) + ", \"status\": \"ok\"}";
-        request->send(200, "application/json", response);
+        // ПРОСТО отдаем последнее число, ничего не запуская!
+        float d = distanceSensor.last_distance_cm;
+        String json = "{\"distance\": " + String(d, 1) + ", \"status\": \"ok\"}";
+        request->send(200, "application/json", json);
     });
 
     server.on("/servo", HTTP_GET, [](AsyncWebServerRequest *request) {
         if (request->hasParam("angle")) {
             cmdServoAngle = request->getParam("angle")->value().toInt();
             cmdServoChanged = true;
+            lastUpdateTime = millis();
         }
         request->send(200, "text/plain", "OK");
     });
@@ -83,12 +71,14 @@ void wifi_init() {
     server.on("/fire", HTTP_GET, [](AsyncWebServerRequest *request) {
         if (request->hasParam("speed") && request->hasParam("angle")) {
             cmdWeaponSpeed = request->getParam("speed")->value().toInt();
-            cmdWeaponAngle = request->getParam("angle")->value().toInt(); // Исправлено!
+            cmdWeaponAngle = request->getParam("angle")->value().toInt(); // ИСПРАВЛЕНО
             cmdWeaponFire = true;
             cmdWeaponChanged = true;
             lastUpdateTime = millis();
+            request->send(200, "text/plain", "OK");
+        } else {
+            request->send(400, "text/plain", "Bad Request");
         }
-        request->send(200, "text/plain", "OK");
     });
 
     server.begin();
