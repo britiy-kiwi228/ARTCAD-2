@@ -28,6 +28,10 @@ void setup() {
     Serial.begin(115200);
 
     delay(1000);
+    pinMode(32, OUTPUT);
+    pinMode(33, OUTPUT);
+    digitalWrite(32, LOW);
+    digitalWrite(33, LOW);
     WRITE_PERI_REG(SENS_SAR_READ_CTRL2_REG, 0); 
     Serial.println("\n\n=== ROBOT POWER ON (NO FAILSAFE MODE) ===");
 
@@ -67,11 +71,6 @@ void loop() {
         cmdChanged = false;
     }
 
-    if (now - lastRefresh > 10) {
-        motor_refresh_pwm(&motorL);
-        motor_refresh_pwm(&motorR);
-        lastRefresh = now;
-    }
 
     if (cmdServoChanged) {
         servo_set_angle(&servoWeapon, cmdServoAngle);

@@ -2,6 +2,7 @@
 #include "secrets.h"
 #include "weapon_system.h"
 #include <Arduino.h>
+#include <esp_wifi.h>
 
 AsyncWebServer server(80);
 
@@ -27,6 +28,7 @@ void wifi_init() {
         attempts++;
     }
     Serial.println(WiFi.localIP());
+    esp_wifi_set_ps(WIFI_PS_NONE); 
 
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
         request->send_P(200, "text/html", index_html);

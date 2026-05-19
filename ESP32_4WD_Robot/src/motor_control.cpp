@@ -3,6 +3,8 @@
 #include "driver/ledc.h"
 #include "esp_rom_gpio.h"
 #include "soc/gpio_sig_map.h"
+#include "driver/mcpwm.h"
+#include "soc/rtc_cntl_reg.h"
 
 static bool motor_timer_initialized = false;
 
@@ -11,57 +13,61 @@ static bool motor_timer_initialized = false;
 #define MOTOR_TIMER_FIX   LEDC_TIMER_1  // ПЕРЕКЛЮЧАЕМ НА ТАЙМЕР ОРУЖИЯ
 
 void motor_init(Motor_t* motor) {
-    // Настраиваем таймер 1 (как в оружии)
-    ledc_timer_config_t timer_conf = {
-        .speed_mode = LEDC_LOW_SPEED_MODE,
-        .duty_resolution = MOTOR_RES_FIX,
-        .timer_num = MOTOR_TIMER_FIX,
-        .freq_hz = MOTOR_FREQ_FIX,
-        .clk_cfg = LEDC_AUTO_CLK
-    };
-    ledc_timer_config(&timer_conf);
+    // 1. Настройка GPIO для MCPWM
+    if (motor->pwm_pin == 32) {
+        mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, motor->pwm_pin);
+    } else {
+        mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM1A, motor->pwm_pin);
+    }
 
+    // 2. Конфигурация MCPWM
+    mcpwm_config_t pwm_config;
+    pwm_config.frequency = 1000; // 1кГц
+    pwm_config.cmpr_a = 0;       // Начальный цикл 0%
+    pwm_config.cmpr_b = 0;
+    pwm_config.counter_mode = MCPWM_UP_COUNTER;
+    pwm_config.duty_mode = MCPWM_DUTY_MODE_0;
+    
+    mcpwm_init(MCPWM_UNIT_0, (motor->pwm_pin == 32) ? MCPWM_TIMER_0 : MCPWM_TIMER_1, &pwm_config);
+
+    // Настройка пинов направления
     pinMode(motor->in1_pin, OUTPUT);
     pinMode(motor->in2_pin, OUTPUT);
-    pinMode(motor->pwm_pin, OUTPUT);
+    digitalWrite(motor->in1_pin, LOW);
+    digitalWrite(motor->in2_pin, LOW);
     
-    // СТРОГАЯ логика инициализации канала
-    ledc_channel_config_t ch_conf = {
-        .gpio_num = motor->pwm_pin,
-        .speed_mode = LEDC_LOW_SPEED_MODE,
-        .channel = (ledc_channel_t)motor->ledc_channel,
-        .intr_type = LEDC_INTR_DISABLE,
-        .timer_sel = MOTOR_TIMER_FIX,
-        .duty = 0,
-        .hpoint = 0
-    };
-    ledc_channel_config(&ch_conf);
-    
-    // Прямая команда драйверу L298N занять пин (Strong Drive)
-   
-     int signal_idx = (motor->ledc_channel < 8) ? (LEDC_LS_SIG_OUT0_IDX + motor->ledc_channel) : (LEDC_HS_SIG_OUT0_IDX + (motor->ledc_channel - 8));
-    esp_rom_gpio_connect_out_signal(motor->pwm_pin, signal_idx, false, false);
+    // Форсируем максимальный ток на пинах (Drive Strength)
+    gpio_set_drive_capability((gpio_num_t)motor->pwm_pin, GPIO_DRIVE_CAP_3);
 }
 
 void motor_set_speed(Motor_t* motor, int speed) {
-    // 1. Копируем constrain из weapon_system
-    speed = constrain(speed, -255, 255);
-    int pwm = abs(speed);
+    float duty = (float)abs(speed);
+    if (duty > 255.0) duty = 255.0;
     
-    // 2. Ограничение как в оружии
-    if (pwm > 0 && pwm < 80) pwm = 80; 
-    
-   
-    motor->current_pwm = pwm;
+    // Переводим 0-255 в 0-100% для MCPWM
+    float duty_percent = (duty / 255.0) * 100.0;
+
+    motor->current_pwm = (int)duty;
     motor->target_speed = speed;
 
-    // 4. Установка направления (как в оружии)
-    digitalWrite(motor->in1_pin, (speed > 0) ? HIGH : LOW);
-    digitalWrite(motor->in2_pin, (speed < 0) ? HIGH : LOW);
+    // Установка направления
+    if (speed > 0) {
+        digitalWrite(motor->in1_pin, HIGH);
+        digitalWrite(motor->in2_pin, LOW);
+    } else if (speed < 0) {
+        digitalWrite(motor->in1_pin, LOW);
+        digitalWrite(motor->in2_pin, HIGH);
+    } else {
+        digitalWrite(motor->in1_pin, LOW);
+        digitalWrite(motor->in2_pin, LOW);
+    }
 
-    // 5. Запись ШИМ
-    ledc_set_duty(LEDC_LOW_SPEED_MODE, (ledc_channel_t)motor->ledc_channel, pwm);
-    ledc_update_duty(LEDC_LOW_SPEED_MODE, (ledc_channel_t)motor->ledc_channel);
+    // Прямая запись в регистр MCPWM (минуя систему LEDC)
+    if (motor->pwm_pin == 32) {
+        mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, duty_percent);
+    } else {
+        mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_1, MCPWM_OPR_A, duty_percent);
+    }
 }
 void motor_refresh_pwm(Motor_t* motor) {
     if (motor->current_pwm > 0) {
