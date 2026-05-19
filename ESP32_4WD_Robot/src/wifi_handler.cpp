@@ -26,25 +26,30 @@ void wifi_init() {
         delay(500);
         attempts++;
     }
+    Serial.println(WiFi.localIP());
 
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
         request->send_P(200, "text/html", index_html);
     });
 
     server.on("/move", HTTP_GET, [](AsyncWebServerRequest *request) {
+    // Используем временные переменные, чтобы парсинг не блокировал волатильные переменные
+        int tempSpd = 0;
+        String tempBtn = "";
+
+        if (request->hasParam("btn")) tempBtn = request->getParam("btn")->value();
+        if (request->hasParam("speed")) tempSpd = request->getParam("speed")->value().toInt();
+
+        // Применяем логику мгновенно
+        if (tempBtn == "forward")  { cmdSpeedL = tempSpd; cmdSpeedR = tempSpd; }
+        else if (tempBtn == "backward") { cmdSpeedL = -tempSpd; cmdSpeedR = -tempSpd; }
+        else if (tempBtn == "left")     { cmdSpeedL = -160; cmdSpeedR = 160; }
+        else if (tempBtn == "right")    { cmdSpeedL = 160; cmdSpeedR = -160; }
+        else { cmdSpeedL = 0; cmdSpeedR = 0; }
+    
+        cmdChanged = true;
         lastUpdateTime = millis();
-        if (request->hasParam("btn")) {
-            String btn = request->getParam("btn")->value();
-            int spd = request->hasParam("speed") ? request->getParam("speed")->value().toInt() : 150;
-            
-            if (btn == "forward") { cmdSpeedL = spd; cmdSpeedR = spd; }
-            else if (btn == "backward") { cmdSpeedL = -spd; cmdSpeedR = -spd; }
-            else if (btn == "left") { cmdSpeedL = -MOTOR_TURN_SPEED; cmdSpeedR = MOTOR_TURN_SPEED; }
-            else if (btn == "right") { cmdSpeedL = MOTOR_TURN_SPEED; cmdSpeedR = -MOTOR_TURN_SPEED; }
-            else { cmdSpeedL = 0; cmdSpeedR = 0; }
-            cmdChanged = true;
-        }
-        request->send(200, "text/plain", "OK"); // Мгновенный ответ
+        request->send(204); 
     });
 
     server.on("/heartbeat", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -55,17 +60,15 @@ void wifi_init() {
     server.on("/distance", HTTP_GET, [](AsyncWebServerRequest *request) {
         // ПРОСТО отдаем последнее число, ничего не запуская!
         float d = distanceSensor.last_distance_cm;
-        String json = "{\"distance\": " + String(d, 1) + ", \"status\": \"ok\"}";
-        request->send(200, "application/json", json);
+        request->send(200, "application/json", "{\"distance\": " + String(d, 1) + "}");
     });
 
     server.on("/servo", HTTP_GET, [](AsyncWebServerRequest *request) {
         if (request->hasParam("angle")) {
             cmdServoAngle = request->getParam("angle")->value().toInt();
             cmdServoChanged = true;
-            lastUpdateTime = millis();
         }
-        request->send(200, "text/plain", "OK");
+        request->send(204);
     });
 
     server.on("/fire", HTTP_GET, [](AsyncWebServerRequest *request) {

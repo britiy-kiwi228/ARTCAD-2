@@ -29,6 +29,8 @@ void motor_init(Motor_t* motor);
 // Функция для установки скорости с плавным разгоном
 void motor_set_speed(Motor_t* motor, int speed);
 
+void motor_refresh_pwm(Motor_t* motor); // Функция для обновления ШИМ (для плавного пуска)
+
 // Функция для обновления плавного разгона (теперь будет вызываться в FreeRTOS task)
 void motor_update_soft_start(Motor_t* motor);
 

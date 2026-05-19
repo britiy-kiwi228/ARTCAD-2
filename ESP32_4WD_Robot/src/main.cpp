@@ -5,6 +5,9 @@
 #include "wifi_handler.h"
 #include "ultrasonic.h"
 #include "weapon_system.h"
+#include "soc/rtc_cntl_reg.h"
+#include "soc/sens_reg.h"
+
 
 Motor_t motorL, motorR;
 Servo_t servoWeapon;
@@ -23,7 +26,9 @@ uint32_t lastUltraScan = 0;
 
 void setup() {
     Serial.begin(115200);
+
     delay(1000);
+    WRITE_PERI_REG(SENS_SAR_READ_CTRL2_REG, 0); 
     Serial.println("\n\n=== ROBOT POWER ON (NO FAILSAFE MODE) ===");
 
     // Моторы
@@ -51,14 +56,21 @@ void setup() {
 }
 
 void loop() {
+    static uint32_t lastRefresh = 0;
     uint32_t now = millis();
 
     // FAILSAFE ОТКЛЮЧЕН - Робот будет выполнять последнюю команду бесконечно
     if (cmdChanged) {
-        Serial.printf(">>> MOTOR COMMAND: L=%d, R=%d\n", cmdSpeedL, cmdSpeedR);
+        
         motor_set_speed(&motorL, cmdSpeedL);
         motor_set_speed(&motorR, cmdSpeedR);
         cmdChanged = false;
+    }
+
+    if (now - lastRefresh > 10) {
+        motor_refresh_pwm(&motorL);
+        motor_refresh_pwm(&motorR);
+        lastRefresh = now;
     }
 
     if (cmdServoChanged) {
@@ -68,20 +80,22 @@ void loop() {
 
     if (cmdWeaponChanged) {
         if (cmdWeaponFire) {
-            Serial.printf(">>> WEAPON FIRE: Spd=%d, Ang=%d\n", cmdWeaponSpeed, cmdWeaponAngle);
+            
             weapon_rotate_to_angle(&weapon_motor, (float)cmdWeaponAngle, cmdWeaponSpeed, 0, 0);
             cmdWeaponFire = false;
-        }
+        }   
         cmdWeaponChanged = false;
     }
-
-    weapon_update_rotation(&weapon_motor);
+    if (weapon_motor.is_rotating) {
+        weapon_update_rotation(&weapon_motor);
+    }
 
     if (now - lastUltraScan > 500) {
         ultrasonic_start_measurement(&distanceSensor);
         ultrasonic_get_distance_cm(&distanceSensor);
         lastUltraScan = now;
     }
+    ultrasonic_get_distance_cm(&distanceSensor);
     
-    delay(5);
+    yield(); 
 }
