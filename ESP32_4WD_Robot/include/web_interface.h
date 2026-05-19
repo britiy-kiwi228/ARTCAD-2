@@ -104,6 +104,8 @@ const char index_html[] PROGMEM = R"rawliteral(
         const distEl = document.getElementById('dist');
         const statEl = document.getElementById('statText');
         const indEl = document.getElementById('indicator');
+        const spdSlider = document.getElementById('spdSlider');
+
 
         // Движение
         async function sendMove(dir, spd) {
@@ -119,21 +121,24 @@ const char index_html[] PROGMEM = R"rawliteral(
         document.getElementById('rgt').onclick = () => sendMove('right', curSpd);
         document.getElementById('stp').onclick = () => sendMove('stop', 0);
 
-        document.getElementById('spdSlider').oninput = (e) => {
+        spdSlider.oninput = (e) => {
+            document.getElementById('spdVal').textContent = e.target.value;
+        };
+
+        // onchange срабатывает только когда ОТПУСТИЛИ слайдер
+        spdSlider.onchange = (e) => {
             curSpd = e.target.value;
-            document.getElementById('spdVal').textContent = curSpd;
             if (curDir !== 'stop') sendMove(curDir, curSpd);
         };
 
-        // Серво
-        let srvT;
-        document.getElementById('srvSlider').oninput = (e) => {
-            const val = e.target.value;
-            document.getElementById('srvVal').textContent = val;
-            clearTimeout(srvT);
-            srvT = setTimeout(() => fetch('/servo?angle=' + val), 50);
+        // Для серво тоже самое - это уберет задержку!
+        const srvSlider = document.getElementById('srvSlider');
+        srvSlider.oninput = (e) => {
+            document.getElementById('srvVal').textContent = e.target.value;
         };
-
+        srvSlider.onchange = (e) => {
+            fetch('/servo?angle=' + e.target.value);
+        };
         // Оружие
         document.getElementById('wSpdSlider').oninput = (e) => {
             document.getElementById('wSpdVal').textContent = e.target.value;

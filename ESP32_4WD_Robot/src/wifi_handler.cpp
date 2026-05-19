@@ -35,23 +35,26 @@ void wifi_init() {
     });
 
     server.on("/move", HTTP_GET, [](AsyncWebServerRequest *request) {
-    // Используем временные переменные, чтобы парсинг не блокировал волатильные переменные
-        int tempSpd = 0;
-        String tempBtn = "";
+        if (request->hasParam("btn")) {
+        // Используем статические буферы, чтобы не нагружать кучу (heap)
+            char btn[10] = {0};
+            request->getParam("btn")->value().toCharArray(btn, 10);
+        
+            int spd = 160;
+            if (request->hasParam("speed")) {
+                spd = atoi(request->getParam("speed")->value().c_str());
+            }
 
-        if (request->hasParam("btn")) tempBtn = request->getParam("btn")->value();
-        if (request->hasParam("speed")) tempSpd = request->getParam("speed")->value().toInt();
-
-        // Применяем логику мгновенно
-        if (tempBtn == "forward")  { cmdSpeedL = tempSpd; cmdSpeedR = tempSpd; }
-        else if (tempBtn == "backward") { cmdSpeedL = -tempSpd; cmdSpeedR = -tempSpd; }
-        else if (tempBtn == "left")     { cmdSpeedL = -160; cmdSpeedR = 160; }
-        else if (tempBtn == "right")    { cmdSpeedL = 160; cmdSpeedR = -160; }
-        else { cmdSpeedL = 0; cmdSpeedR = 0; }
-    
-        cmdChanged = true;
-        lastUpdateTime = millis();
-        request->send(204); 
+        // Атомарно меняем глобальные переменные
+            if (strcmp(btn, "forward") == 0) { cmdSpeedL = spd; cmdSpeedR = spd; }
+            else if (strcmp(btn, "backward") == 0) { cmdSpeedL = -spd; cmdSpeedR = -spd; }
+            else if (strcmp(btn, "left") == 0) { cmdSpeedL = -160; cmdSpeedR = 160; }
+            else if (strcmp(btn, "right") == 0) { cmdSpeedL = 160; cmdSpeedR = -160; }
+            else { cmdSpeedL = 0; cmdSpeedR = 0; }
+        
+            cmdChanged = true;
+        }
+        request->send(204);
     });
 
     server.on("/heartbeat", HTTP_GET, [](AsyncWebServerRequest *request) {

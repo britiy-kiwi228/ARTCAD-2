@@ -6,76 +6,51 @@
 #include "driver/mcpwm.h"
 #include "soc/rtc_cntl_reg.h"
 
-static bool motor_timer_initialized = false;
+static int soft_pwm_l = 0;
+static int soft_pwm_r = 0;
 
-#define MOTOR_FREQ_FIX    1000
-#define MOTOR_RES_FIX     LEDC_TIMER_8_BIT
-#define MOTOR_TIMER_FIX   LEDC_TIMER_1  // ПЕРЕКЛЮЧАЕМ НА ТАЙМЕР ОРУЖИЯ
+void motor_task(void* pv) {
+    while(1) {
+        // Простейший программный ШИМ на 100 Гц (хватит для моторов)
+        // Период 10мс
+        for (int i = 0; i < 255; i++) {
+            digitalWrite(MOTOR_L_PWM, (i < soft_pwm_l) ? HIGH : LOW);
+            digitalWrite(MOTOR_R_PWM, (i < soft_pwm_r) ? HIGH : LOW);
+            delayMicroseconds(30); // Очень быстрый цикл
+        }
+        vTaskDelay(1); // Даем системе подышать
+    }
+}
 
 void motor_init(Motor_t* motor) {
-    // 1. Настройка GPIO для MCPWM
-    if (motor->pwm_pin == 32) {
-        mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM0A, motor->pwm_pin);
-    } else {
-        mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM1A, motor->pwm_pin);
-    }
-
-    // 2. Конфигурация MCPWM
-    mcpwm_config_t pwm_config;
-    pwm_config.frequency = 1000; // 1кГц
-    pwm_config.cmpr_a = 0;       // Начальный цикл 0%
-    pwm_config.cmpr_b = 0;
-    pwm_config.counter_mode = MCPWM_UP_COUNTER;
-    pwm_config.duty_mode = MCPWM_DUTY_MODE_0;
-    
-    mcpwm_init(MCPWM_UNIT_0, (motor->pwm_pin == 32) ? MCPWM_TIMER_0 : MCPWM_TIMER_1, &pwm_config);
-
-    // Настройка пинов направления
+    pinMode(motor->pwm_pin, OUTPUT);
     pinMode(motor->in1_pin, OUTPUT);
     pinMode(motor->in2_pin, OUTPUT);
-    digitalWrite(motor->in1_pin, LOW);
-    digitalWrite(motor->in2_pin, LOW);
     
-    // Форсируем максимальный ток на пинах (Drive Strength)
-    gpio_set_drive_capability((gpio_num_t)motor->pwm_pin, GPIO_DRIVE_CAP_3);
+    // Запускаем задачу управления один раз
+    static bool task_started = false;
+    if (!task_started) {
+        xTaskCreatePinnedToCore(motor_task, "MotorTask", 2048, NULL, 10, NULL, 1);
+        task_started = true;
+    }
 }
 
 void motor_set_speed(Motor_t* motor, int speed) {
-    float duty = (float)abs(speed);
-    if (duty > 255.0) duty = 255.0;
-    
-    // Переводим 0-255 в 0-100% для MCPWM
-    float duty_percent = (duty / 255.0) * 100.0;
-
-    motor->current_pwm = (int)duty;
-    motor->target_speed = speed;
+    int pwm = constrain(abs(speed), 0, 255);
+    if (pwm > 0 && pwm < 80) pwm = 80; // Порог старта
 
     // Установка направления
-    if (speed > 0) {
-        digitalWrite(motor->in1_pin, HIGH);
-        digitalWrite(motor->in2_pin, LOW);
-    } else if (speed < 0) {
-        digitalWrite(motor->in1_pin, LOW);
-        digitalWrite(motor->in2_pin, HIGH);
-    } else {
-        digitalWrite(motor->in1_pin, LOW);
-        digitalWrite(motor->in2_pin, LOW);
-    }
+    digitalWrite(motor->in1_pin, (speed > 0) ? HIGH : LOW);
+    digitalWrite(motor->in2_pin, (speed < 0) ? HIGH : LOW);
 
-    // Прямая запись в регистр MCPWM (минуя систему LEDC)
-    if (motor->pwm_pin == 32) {
-        mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, duty_percent);
-    } else {
-        mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_1, MCPWM_OPR_A, duty_percent);
-    }
+    // Передаем значение в программный ШИМ
+    if (motor->pwm_pin == 32) soft_pwm_l = pwm;
+    else soft_pwm_r = pwm;
+    
+    motor->current_pwm = pwm;
 }
-void motor_refresh_pwm(Motor_t* motor) {
-    if (motor->current_pwm > 0) {
-        ledc_update_duty(LEDC_LOW_SPEED_MODE, (ledc_channel_t)motor->ledc_channel);
-    }
-}
-
 // Заглушки для компиляции
+void motor_refresh_pwm(Motor_t* motor) {}
 void motor_update_soft_start(Motor_t* motor) {}
 void motor_control_task(void* pvParameters) { while(1) vTaskDelay(100); }
 int motor_get_current_pwm(Motor_t* motor) { return motor->current_pwm; }
