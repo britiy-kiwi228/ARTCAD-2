@@ -89,8 +89,12 @@ void loop() {
     if (weapon_motor.is_rotating) {
         weapon_update_rotation(&weapon_motor);
     }
+    if (now - lastUpdateTime > 1500) { // Если нет запросов от веб-интерфейса больше 1.5 сек
+        motor_set_speed(&motorL, 0);
+        motor_set_speed(&motorR, 0);
+    }
 
-    if (now - lastUltraScan > 500) {
+    if (now - lastUltraScan > 300) {
         ultrasonic_start_measurement(&distanceSensor);
         ultrasonic_get_distance_cm(&distanceSensor);
         lastUltraScan = now;
