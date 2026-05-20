@@ -121,14 +121,16 @@ const char index_html[] PROGMEM = R"rawliteral(
         document.getElementById('rgt').onclick = () => sendMove('right', curSpd);
         document.getElementById('stp').onclick = () => sendMove('stop', 0);
 
+        let throttleTimeout = null;
         spdSlider.oninput = (e) => {
             document.getElementById('spdVal').textContent = e.target.value;
-        };
-
-        // onchange срабатывает только когда ОТПУСТИЛИ слайдер
-        spdSlider.onchange = (e) => {
-            curSpd = e.target.value;
-            if (curDir !== 'stop') sendMove(curDir, curSpd);
+            if (!throttleTimeout) {
+                throttleTimeout = setTimeout(() => {
+                    curSpd = e.target.value;
+                    if (curDir !== 'stop') sendMove(curDir, curSpd);
+                    throttleTimeout = null;
+                }, 50); // Ограничиваем частоту запросов до 20 в секунду
+            }
         };
 
         // Для серво тоже самое - это уберет задержку!

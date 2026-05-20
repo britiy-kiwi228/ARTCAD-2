@@ -35,27 +35,34 @@ void wifi_init() {
     });
 
     server.on("/move", HTTP_GET, [](AsyncWebServerRequest *request) {
-        if (request->hasParam("btn")) {
-        // Используем статические буферы, чтобы не нагружать кучу (heap)
-            char btn[10] = {0};
-            request->getParam("btn")->value().toCharArray(btn, 10);
+    if (request->hasParam("btn")) {
+        String btn = request->getParam("btn")->value();
         
-            int spd = 160;
-            if (request->hasParam("speed")) {
-                spd = atoi(request->getParam("speed")->value().c_str());
-            }
-
-        // Атомарно меняем глобальные переменные
-            if (strcmp(btn, "forward") == 0) { cmdSpeedL = spd; cmdSpeedR = spd; }
-            else if (strcmp(btn, "backward") == 0) { cmdSpeedL = -spd; cmdSpeedR = -spd; }
-            else if (strcmp(btn, "left") == 0) { cmdSpeedL = -160; cmdSpeedR = 160; }
-            else if (strcmp(btn, "right") == 0) { cmdSpeedL = 160; cmdSpeedR = -160; }
-            else { cmdSpeedL = 0; cmdSpeedR = 0; }
-        
-            cmdChanged = true;
+        // 1. Устанавливаем базу 180 (чтобы точно поехало), если слайдер не прислал иное
+        int spd = 180; 
+        if (request->hasParam("speed")) {
+            int sliderVal = request->getParam("speed")->value().toInt();
+            // Если слайдер меньше 140, заставляем его быть 180 для теста
+            spd = (sliderVal < 140) ? 180 : sliderVal;
         }
-        request->send(204);
-    });
+
+        if (btn == "forward") { 
+            cmdSpeedL = spd; cmdSpeedR = spd; 
+        } else if (btn == "backward") { 
+            cmdSpeedL = -spd; cmdSpeedR = -spd; 
+        } else if (btn == "left") { 
+            cmdSpeedL = -180; cmdSpeedR = 180; // Тоже 180 для теста
+        } else if (btn == "right") { 
+            cmdSpeedL = 180; cmdSpeedR = -180; 
+        } else { 
+            cmdSpeedL = 0; cmdSpeedR = 0; 
+        }
+        
+        cmdChanged = true;
+        Serial.printf("MOVE: %s | SPEED: %d\n", btn.c_str(), spd); // Чтобы видеть в мониторе порта
+    }
+    request->send(204);
+});
 
     server.on("/heartbeat", HTTP_GET, [](AsyncWebServerRequest *request) {
         lastUpdateTime = millis();

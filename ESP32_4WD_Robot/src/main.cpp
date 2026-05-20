@@ -28,11 +28,14 @@ void setup() {
     Serial.begin(115200);
 
     delay(1000);
+    // SENS_SAR_READ_CTRL2_REG отвечает за управление ADC2
+    WRITE_PERI_REG(SENS_SAR_READ_CTRL2_REG, 0); 
+    // Отключаем принудительное чтение ADC2, которое делает WiFi PHY
+    SET_PERI_REG_MASK(SENS_SAR_READ_CTRL2_REG, SENS_SAR2_DIG_FORCE);
     pinMode(32, OUTPUT);
     pinMode(33, OUTPUT);
     digitalWrite(32, LOW);
     digitalWrite(33, LOW);
-    WRITE_PERI_REG(SENS_SAR_READ_CTRL2_REG, 0); 
     Serial.println("\n\n=== ROBOT POWER ON (NO FAILSAFE MODE) ===");
 
     // Моторы
@@ -65,10 +68,16 @@ void loop() {
 
     // FAILSAFE ОТКЛЮЧЕН - Робот будет выполнять последнюю команду бесконечно
     if (cmdChanged) {
-        
-        motor_set_speed(&motorL, cmdSpeedL);
-        motor_set_speed(&motorR, cmdSpeedR);
+        // Создаем локальную копию ПЕРЕД использованием
+        // Это гарантирует, что пока мотор крутится, WiFi не изменит значение в середине такта
+        noInterrupts(); 
+        int localL = cmdSpeedL;
+        int localR = cmdSpeedR;
         cmdChanged = false;
+        interrupts();
+
+        motor_set_speed(&motorL, localL);
+        motor_set_speed(&motorR, localR);
     }
 
 
