@@ -91,7 +91,7 @@ const char index_html[] PROGMEM = R"rawliteral(
 
         <div class="status">
             <span class="status-indicator" id="indicator"></span>
-            <span id="statText">Подключение...</span>
+            <span id="statText">Подключение к WebSocket...</span>
         </div>
     </div>
 
@@ -105,14 +105,49 @@ const char index_html[] PROGMEM = R"rawliteral(
         const statEl = document.getElementById('statText');
         const indEl = document.getElementById('indicator');
         const spdSlider = document.getElementById('spdSlider');
+        const srvSlider = document.getElementById('srvSlider');
 
+        // Инициализация WebSocket
+        let gateway = `ws://${window.location.host}/ws`;
+        let websocket;
 
-        // Движение
-        async function sendMove(dir, spd) {
+        function initWebSocket() {
+            console.log('Попытка установить WebSocket соединение...');
+            websocket = new WebSocket(gateway);
+            websocket.onopen = onOpen;
+            websocket.onclose = onClose;
+            websocket.onmessage = onMessage;
+        }
+
+        function onOpen(event) {
+            indEl.classList.add('online');
+            statEl.textContent = "Соединение активно";
+        }
+
+        function onClose(event) {
+            indEl.classList.remove('online');
+            statEl.textContent = "Связь потеряна. Повторное подключение...";
+            setTimeout(initWebSocket, 2000); // Авто-реконнект каждые 2 секунды
+        }
+
+        function onMessage(event) {
+            // Прием телеметрии от ESP32
+            let data = event.data;
+            if (data.startsWith("D:")) {
+                let dist = parseFloat(data.substring(2));
+                distEl.textContent = dist > 0 ? dist.toFixed(1) : "---";
+            }
+        }
+
+        // Движение (отправка формата "M:направление:скорость")
+        function sendMove(dir, spd) {
             const now = Date.now();
             if (dir !== 'stop' && dir === curDir && spd === curSpd && (now - lastMoveTime < 100)) return;
             curDir = dir; curSpd = spd; lastMoveTime = now;
-            try { await fetch(`/move?btn=${dir}&speed=${spd}`); } catch (e) {}
+            
+            if (websocket.readyState === WebSocket.OPEN) {
+                websocket.send(`M:${dir}:${spd}`);
+            }
         }
 
         document.getElementById('fwd').onclick = () => sendMove('forward', curSpd);
@@ -129,18 +164,20 @@ const char index_html[] PROGMEM = R"rawliteral(
                     curSpd = e.target.value;
                     if (curDir !== 'stop') sendMove(curDir, curSpd);
                     throttleTimeout = null;
-                }, 50); // Ограничиваем частоту запросов до 20 в секунду
+                }, 50);
             }
         };
 
-        // Для серво тоже самое - это уберет задержку!
-        const srvSlider = document.getElementById('srvSlider');
+        // Серво (отправка формата "S:угол")
         srvSlider.oninput = (e) => {
             document.getElementById('srvVal').textContent = e.target.value;
         };
         srvSlider.onchange = (e) => {
-            fetch('/servo?angle=' + e.target.value);
+            if (websocket.readyState === WebSocket.OPEN) {
+                websocket.send(`S:${e.target.value}`);
+            }
         };
+
         // Оружие
         document.getElementById('wSpdSlider').oninput = (e) => {
             document.getElementById('wSpdVal').textContent = e.target.value;
@@ -149,7 +186,8 @@ const char index_html[] PROGMEM = R"rawliteral(
             document.getElementById('wAngVal').textContent = e.target.value;
         };
 
-        document.getElementById('fire').onclick = async () => {
+        // Выстрел (отправка формата "W:скорость:угол")
+        document.getElementById('fire').onclick = () => {
             if (weaponRotating) return;
             const wSpd = document.getElementById('wSpdSlider').value;
             const wAng = document.getElementById('wAngSlider').value;
@@ -157,29 +195,26 @@ const char index_html[] PROGMEM = R"rawliteral(
             statEl.textContent = "🔥 ВЫСТРЕЛ (" + wAng + "°)...";
             weaponRotating = true;
 
-            try {
-                // Теперь отправляем и скорость, и угол!
-                await fetch(`/fire?speed=${wSpd}&angle=${wAng}`);
-                setTimeout(() => { 
-                    weaponRotating = false; 
-                    statEl.textContent = "Готов к бою"; 
-                }, 1500);
-            } catch (e) { weaponRotating = false; }
+            if (websocket.readyState === WebSocket.OPEN) {
+                websocket.send(`W:${wSpd}:${wAng}`);
+            }
+
+            setTimeout(() => { 
+                weaponRotating = false; 
+                statEl.textContent = "Готов к бою"; 
+            }, 1500);
         };
 
-        // Датчик и Heartbeat
-        async function updateData() {
-            try {
-                const res = await fetch('/distance');
-                const data = await res.json();
-                distEl.textContent = data.distance > 0 ? data.distance.toFixed(1) : "---";
-                indEl.classList.add('online');
-            } catch (e) { indEl.classList.remove('online'); }
-        }
-        setInterval(updateData, 1000);
-        setInterval(() => fetch('/heartbeat').catch(()=>{}), 500);
+        // WebSocket Heartbeat (для FailSafe)
+        setInterval(() => {
+            if (websocket && websocket.readyState === WebSocket.OPEN) {
+                websocket.send('H'); // Передаем минимальный пакет
+            }
+        }, 500);
         
-        window.onload = () => { indEl.classList.add('online'); statEl.textContent = "Система готова"; };
+        window.onload = () => {
+            initWebSocket();
+        };
     </script>
 </body>
 </html>

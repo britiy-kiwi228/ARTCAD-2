@@ -7,17 +7,17 @@
 #include "servo_control.h" // для управления сервоприводом
 #include "ultrasonic.h" // для датчика расстояния
 #include "web_interface.h" // web-интерфейс управления роботом
-// Параметры сети
 #include "secrets.h"
-// объявления экстерных переменных 
+
+// объявления внешних переменных 
 extern Motor_t motorL;
 extern Motor_t motorR;
 extern Servo_t servoWeapon;
 extern Ultrasonic_t distanceSensor;
 extern volatile uint32_t lastUpdateTime;
-extern bool isFailsafeActive;
 
 // Прототипы функций
 void wifi_init();
+void wifi_broadcast_distance(float distance); // Отправка телеметрии
 
-#endif
+#endif // WIFI_HANDLER_H

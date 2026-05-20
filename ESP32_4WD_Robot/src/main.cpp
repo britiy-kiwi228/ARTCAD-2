@@ -99,7 +99,11 @@ void loop() {
 
     if (now - lastUltraScan > 300) {
         ultrasonic_start_measurement(&distanceSensor);
-        ultrasonic_get_distance_cm(&distanceSensor);
+        
+        // Считываем расстояние и сразу транслируем его по WebSocket всем подключенным клиентам
+        float d = ultrasonic_get_distance_cm(&distanceSensor);
+        wifi_broadcast_distance(d); 
+        
         lastUltraScan = now;
     }
     ultrasonic_get_distance_cm(&distanceSensor);
