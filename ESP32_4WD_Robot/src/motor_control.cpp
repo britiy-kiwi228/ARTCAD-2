@@ -42,11 +42,12 @@ void motor_init(Motor_t* motor) {
 }
 
 void motor_set_speed(Motor_t* motor, int speed) {
-    // Используем локальную копию, чтобы избежать конфликта ядер
     int target_pwm = constrain(abs(speed), 0, 255);
     
-    // Порог для L298N
-    if (target_pwm > 0 && target_pwm < 70) target_pwm = 70;
+    // Снижаем минимальный порог старта для L298N до 50
+    if (target_pwm > 0 && target_pwm < 50) {
+        target_pwm = 50;
+    }
 
     digitalWrite(motor->in1_pin, (speed > 0) ? HIGH : LOW);
     digitalWrite(motor->in2_pin, (speed < 0) ? HIGH : LOW);

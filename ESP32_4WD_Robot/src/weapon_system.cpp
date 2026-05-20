@@ -52,12 +52,32 @@ void weapon_stop(WeaponMotor_t* weapon) {
 }
 
 bool weapon_rotate_to_angle(WeaponMotor_t* weapon, float angle, int speed, uint8_t loadL, uint8_t loadR) {
-    if (loadL > WEAPON_MOTOR_LOAD_THRESHOLD || loadR > WEAPON_MOTOR_LOAD_THRESHOLD) return false;
+    if (loadL > WEAPON_MOTOR_LOAD_THRESHOLD || loadR > WEAPON_MOTOR_LOAD_THRESHOLD) {
+        return false;
+    }
 
-    float t_360 = 60000.0f / weapon->motor_rpm;
+    // Ограничиваем ШИМ в рамках лимитов оружия
+    int target_pwm = constrain(abs(speed), 0, WEAPON_MAX_PWM);
+    if (target_pwm <= 0) {
+        return false; // При нулевой скорости вращение невозможно
+    }
+
+    // Рассчитываем коэффициент снижения скорости относительно максимального ШИМ (255.0)
+    float speed_ratio = (float)target_pwm / 255.0f;
+    
+    // Рассчитываем реальный RPM мотора при данном уровне ШИМ
+    float actual_rpm = weapon->motor_rpm * speed_ratio;
+
+    // Рассчитываем время полного оборота (360 град) в миллисекундах на текущей скорости
+    float t_360 = 60000.0f / actual_rpm;
+
+    // Рассчитываем финальное время работы мотора для достижения целевого угла
     weapon->target_time_ms = (angle / 360.0f) * t_360 / weapon->gear_ratio;
+    
     weapon->rotation_start_ms = millis();
     weapon->is_rotating = true;
+    
+    // Запускаем мотор
     weapon_set_speed(weapon, speed);
     return true;
 }

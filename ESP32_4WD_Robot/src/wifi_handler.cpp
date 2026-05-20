@@ -35,34 +35,34 @@ void wifi_init() {
     });
 
     server.on("/move", HTTP_GET, [](AsyncWebServerRequest *request) {
-    if (request->hasParam("btn")) {
-        String btn = request->getParam("btn")->value();
-        
-        // 1. Устанавливаем базу 180 (чтобы точно поехало), если слайдер не прислал иное
-        int spd = 180; 
-        if (request->hasParam("speed")) {
-            int sliderVal = request->getParam("speed")->value().toInt();
-            // Если слайдер меньше 140, заставляем его быть 180 для теста
-            spd = (sliderVal < 140) ? 180 : sliderVal;
-        }
+        if (request->hasParam("btn")) {
+            String btn = request->getParam("btn")->value();
+            
+            // Базовое значение скорости по умолчанию
+            int spd = 128; 
+            if (request->hasParam("speed")) {
+                int sliderVal = request->getParam("speed")->value().toInt();
+                // Позволяем опускать скорость до 50 для медленной езды
+                spd = (sliderVal < 50) ? 50 : sliderVal;
+            }
 
-        if (btn == "forward") { 
-            cmdSpeedL = spd; cmdSpeedR = spd; 
-        } else if (btn == "backward") { 
-            cmdSpeedL = -spd; cmdSpeedR = -spd; 
-        } else if (btn == "left") { 
-            cmdSpeedL = -180; cmdSpeedR = 180; // Тоже 180 для теста
-        } else if (btn == "right") { 
-            cmdSpeedL = 180; cmdSpeedR = -180; 
-        } else { 
-            cmdSpeedL = 0; cmdSpeedR = 0; 
+            if (btn == "forward") { 
+                cmdSpeedL = spd; cmdSpeedR = spd; 
+            } else if (btn == "backward") { 
+                cmdSpeedL = -spd; cmdSpeedR = -spd; 
+            } else if (btn == "left") { 
+                cmdSpeedL = -spd; cmdSpeedR = spd; // Скорость поворота теперь берется со слайдера
+            } else if (btn == "right") { 
+                cmdSpeedL = spd; cmdSpeedR = -spd; // Скорость поворота теперь берется со слайдера
+            } else { 
+                cmdSpeedL = 0; cmdSpeedR = 0; 
+            }
+            
+            cmdChanged = true;
+            Serial.printf("MOVE: %s | SPEED: %d\n", btn.c_str(), spd);
         }
-        
-        cmdChanged = true;
-        Serial.printf("MOVE: %s | SPEED: %d\n", btn.c_str(), spd); // Чтобы видеть в мониторе порта
-    }
-    request->send(204);
-});
+        request->send(204);
+    });
 
     server.on("/heartbeat", HTTP_GET, [](AsyncWebServerRequest *request) {
         lastUpdateTime = millis();
