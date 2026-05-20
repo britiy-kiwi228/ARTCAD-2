@@ -57,8 +57,12 @@ void setup() {
 void loop() {
     static uint32_t lastRefresh = 0;
     uint32_t now = millis();
+    if (now - lastUpdateTime > 1500) { // Если нет запросов от веб-интерфейса больше 1.5 сек
+        motor_set_speed(&motorL, 0);
+        motor_set_speed(&motorR, 0);
+    }
 
-    // FAILSAFE ОТКЛЮЧЕН - Робот будет выполнять последнюю команду бесконечно
+    
     if (cmdChanged) {
         // Создаем локальную копию ПЕРЕД использованием
         // Это гарантирует, что пока мотор крутится, WiFi не изменит значение в середине такта
@@ -71,6 +75,8 @@ void loop() {
         motor_set_speed(&motorL, localL);
         motor_set_speed(&motorR, localR);
     }
+    motor_update_soft_start(&motorL);
+    motor_update_soft_start(&motorR);
 
 
     if (cmdServoChanged) {
@@ -89,10 +95,7 @@ void loop() {
     if (weapon_motor.is_rotating) {
         weapon_update_rotation(&weapon_motor);
     }
-    if (now - lastUpdateTime > 1500) { // Если нет запросов от веб-интерфейса больше 1.5 сек
-        motor_set_speed(&motorL, 0);
-        motor_set_speed(&motorR, 0);
-    }
+    
 
     if (now - lastUltraScan > 300) {
         ultrasonic_start_measurement(&distanceSensor);

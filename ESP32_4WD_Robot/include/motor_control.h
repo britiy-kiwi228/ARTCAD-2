@@ -26,6 +26,8 @@ typedef struct {
 // Функция для инициализации мотора
 void motor_init(Motor_t* motor);
 
+static int get_signed_current_speed(Motor_t* motor); // Внутренняя функция для получения текущей скорости с учетом направления
+
 // Функция для установки скорости с плавным разгоном
 void motor_set_speed(Motor_t* motor, int speed);
 
