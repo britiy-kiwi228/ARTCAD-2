@@ -62,7 +62,7 @@
 #define SERVO_MAX_DUTY    7864  // 2.4ms
 
 // --- Параметры оружия ---
-#define WEAPON_MOTOR_RPM      205           
+#define WEAPON_MOTOR_RPM      271.0f           
 #define WEAPON_GEAR_RATIO     1.0f         
 #define WEAPON_MAX_PWM        200             
 #define WEAPON_ROTATION_ANGLE 45.0f    

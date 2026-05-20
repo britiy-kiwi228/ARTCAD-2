@@ -56,28 +56,33 @@ bool weapon_rotate_to_angle(WeaponMotor_t* weapon, float angle, int speed, uint8
         return false;
     }
 
-    // Ограничиваем ШИМ в рамках лимитов оружия
     int target_pwm = constrain(abs(speed), 0, WEAPON_MAX_PWM);
     if (target_pwm <= 0) {
-        return false; // При нулевой скорости вращение невозможно
+        return false; 
     }
 
-    // Рассчитываем коэффициент снижения скорости относительно максимального ШИМ (255.0)
     float speed_ratio = (float)target_pwm / 255.0f;
-    
-    // Рассчитываем реальный RPM мотора при данном уровне ШИМ
     float actual_rpm = weapon->motor_rpm * speed_ratio;
-
-    // Рассчитываем время полного оборота (360 град) в миллисекундах на текущей скорости
     float t_360 = 60000.0f / actual_rpm;
 
-    // Рассчитываем финальное время работы мотора для достижения целевого угла
-    weapon->target_time_ms = (angle / 360.0f) * t_360 / weapon->gear_ratio;
+    // Расчет базового времени движения
+    float base_time_ms = (angle / 360.0f) * t_360 / weapon->gear_ratio;
+
+    // ДИНАМИЧЕСКАЯ ПОПРАВКА НА ИНЕРЦИЮ И ТРЕНИЕ:
+    // На малой скорости (speed_ratio близко к 0) прибавляем до ~60 мс на старт.
+    // На высокой скорости (speed_ratio близко к 1) вычитаем до ~15 мс для компенсации выбега по инерции.
+    float correction_ms = 60.0f - (75.0f * speed_ratio);
+
+    weapon->target_time_ms = base_time_ms + correction_ms;
     
+    // Защита от отрицательного времени на экстремально высоких скоростях
+    if (weapon->target_time_ms < 10.0f) {
+        weapon->target_time_ms = 10.0f;
+    }
+
     weapon->rotation_start_ms = millis();
     weapon->is_rotating = true;
     
-    // Запускаем мотор
     weapon_set_speed(weapon, speed);
     return true;
 }
