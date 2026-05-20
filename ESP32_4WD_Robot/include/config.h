@@ -15,13 +15,14 @@
   #define DEBUG_PRINTF(...)
 #endif
 
+
 // --- Пины ходовой части (L298N) ---
 #define MOTOR_L_PWM 32
-#define MOTOR_L_IN1 25
-#define MOTOR_L_IN2 26
+#define MOTOR_L_IN1 25  // Возвращаем исходный пин
+#define MOTOR_L_IN2 26  // Возвращаем исходный пин
 #define MOTOR_R_PWM 33
-#define MOTOR_R_IN1 27
-#define MOTOR_R_IN2 14
+#define MOTOR_R_IN1 27  // Возвращаем исходный пин
+#define MOTOR_R_IN2 14  // Возвращаем исходный пин
 
 // --- Пины системы вооружения (L298N) ---
 #define WEAPON_EN  21  

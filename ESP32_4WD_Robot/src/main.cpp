@@ -26,17 +26,9 @@ uint32_t lastUltraScan = 0;
 
 void setup() {
     Serial.begin(115200);
-
     delay(1000);
-    // SENS_SAR_READ_CTRL2_REG отвечает за управление ADC2
-    WRITE_PERI_REG(SENS_SAR_READ_CTRL2_REG, 0); 
-    // Отключаем принудительное чтение ADC2, которое делает WiFi PHY
-    SET_PERI_REG_MASK(SENS_SAR_READ_CTRL2_REG, SENS_SAR2_DIG_FORCE);
-    pinMode(32, OUTPUT);
-    pinMode(33, OUTPUT);
-    digitalWrite(32, LOW);
-    digitalWrite(33, LOW);
-    Serial.println("\n\n=== ROBOT POWER ON (NO FAILSAFE MODE) ===");
+    
+    Serial.println("\n\n=== ROBOT POWER ON ===");
 
     // Моторы
     motorL.pwm_pin = MOTOR_L_PWM; motorL.in1_pin = MOTOR_L_IN1; motorL.in2_pin = MOTOR_L_IN2;
