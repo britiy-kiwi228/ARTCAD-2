@@ -84,7 +84,7 @@ const char index_html[] PROGMEM = R"rawliteral(
             <input type="range" id="wSpdSlider" min="50" max="255" value="200">
             
             <div style="margin-top:10px;" class="slider-label">Угол выстрела: <span class="value" id="wAngVal">45</span>°</div>
-            <input type="range" id="wAngSlider" min="0" max="360" value="45">
+            <input type="range" id="wAngSlider" min="-360" max="360" value="45">
             
             <button class="btn fire-btn" id="fire">🔫 ВЫСТРЕЛ</button>
         </div>

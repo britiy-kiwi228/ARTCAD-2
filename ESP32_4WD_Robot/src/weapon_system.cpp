@@ -65,17 +65,15 @@ bool weapon_rotate_to_angle(WeaponMotor_t* weapon, float angle, int speed, uint8
     float actual_rpm = weapon->motor_rpm * speed_ratio;
     float t_360 = 60000.0f / actual_rpm;
 
-    // Расчет базового времени движения
-    float base_time_ms = (angle / 360.0f) * t_360 / weapon->gear_ratio;
+    // ВАЖНО: Берем абсолютное значение угла для расчета времени движения (время всегда положительно)
+    float abs_angle = abs(angle);
+    float base_time_ms = (abs_angle / 360.0f) * t_360 / weapon->gear_ratio;
 
-    // ДИНАМИЧЕСКАЯ ПОПРАВКА НА ИНЕРЦИЮ И ТРЕНИЕ:
-    // На малой скорости (speed_ratio близко к 0) прибавляем до ~60 мс на старт.
-    // На высокой скорости (speed_ratio близко к 1) вычитаем до ~15 мс для компенсации выбега по инерции.
+    // Динамическая поправка на инерцию и трение
     float correction_ms = 60.0f - (75.0f * speed_ratio);
 
     weapon->target_time_ms = base_time_ms + correction_ms;
     
-    // Защита от отрицательного времени на экстремально высоких скоростях
     if (weapon->target_time_ms < 10.0f) {
         weapon->target_time_ms = 10.0f;
     }
@@ -83,7 +81,11 @@ bool weapon_rotate_to_angle(WeaponMotor_t* weapon, float angle, int speed, uint8
     weapon->rotation_start_ms = millis();
     weapon->is_rotating = true;
     
-    weapon_set_speed(weapon, speed);
+    // ОПРЕДЕЛЕНИЕ НАПРАВЛЕНИЯ: 
+    // Если угол отрицательный, то скорость будет со знаком минус, что включит реверс на L298N
+    int final_speed = (angle < 0) ? -target_pwm : target_pwm;
+    weapon_set_speed(weapon, final_speed);
+    
     return true;
 }
 
