@@ -16,6 +16,8 @@ extern volatile int cmdServoAngle;
 extern volatile bool cmdServoChanged;
 extern volatile int cmdWeaponSpeed, cmdWeaponAngle;
 extern volatile bool cmdWeaponFire, cmdWeaponChanged;
+extern volatile int cmdWeaponSpeed, cmdWeaponAngle;
+extern volatile bool cmdWeaponFire, cmdWeaponFireAuto, cmdWeaponChanged; // Добавлено cmdWeaponFireAuto
 
 // Функция быстрой отправки телеметрии расстояния всем активным клиентам по WebSocket
 void wifi_broadcast_distance(float distance) {
@@ -69,16 +71,39 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
             }
         } 
         else if (strcmp(type, "W") == 0) { 
-            // Команда оружия: "W:скорость:угол"
+            // Команда оружия: "W:скорость:угол" (Перемещение)
             char* speed_str = strtok(NULL, ":");
             char* angle_str = strtok(NULL, ":");
             if (speed_str != NULL && angle_str != NULL) {
                 cmdWeaponSpeed = atoi(speed_str);
                 cmdWeaponAngle = atoi(angle_str);
-                cmdWeaponFire = true;
+                cmdWeaponFire = true;       // Сигнал обычного перемещения
                 cmdWeaponChanged = true;
             }
         }
+        else if (strcmp(type, "W") == 0) { 
+            // Команда оружия: "W:скорость:угол" (Перемещение)
+            char* speed_str = strtok(NULL, ":");
+            char* angle_str = strtok(NULL, ":");
+            if (speed_str != NULL && angle_str != NULL) {
+                cmdWeaponSpeed = atoi(speed_str);
+                cmdWeaponAngle = atoi(angle_str);
+                cmdWeaponFire = true;       // Сигнал обычного перемещения
+                cmdWeaponChanged = true;
+            }
+        }
+        else if (strcmp(type, "F") == 0) { 
+            // Команда автовыстрела: "F:скорость:угол" (Выстрел)
+            char* speed_str = strtok(NULL, ":");
+            char* angle_str = strtok(NULL, ":");
+            if (speed_str != NULL && angle_str != NULL) {
+                cmdWeaponSpeed = atoi(speed_str);
+                cmdWeaponAngle = atoi(angle_str);
+                cmdWeaponFireAuto = true;   // Сигнал автовыстрела с сервоприводом
+                cmdWeaponChanged = true;
+            }
+        }
+
     }
 }
 

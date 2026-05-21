@@ -19,7 +19,11 @@ volatile bool cmdChanged = false;
 volatile int cmdServoAngle = 90;
 volatile bool cmdServoChanged = false;
 volatile int cmdWeaponSpeed = 0, cmdWeaponAngle = 0;
-volatile bool cmdWeaponFire = false, cmdWeaponChanged = false;
+volatile bool cmdWeaponFire = false, cmdWeaponFireAuto = false, cmdWeaponChanged = false; // Добавлен cmdWeaponFireAuto
+
+// Состояние неблокирующего автовыстрела
+bool is_firing_sequence = false;          // Активен ли процесс автовыстрела в данный момент
+uint32_t fire_sequence_start_ms = 0;      // Время начала движения мотора ложки
 
 volatile uint32_t lastUpdateTime = 0;
 uint32_t lastUltraScan = 0;
@@ -86,11 +90,31 @@ void loop() {
 
     if (cmdWeaponChanged) {
         if (cmdWeaponFire) {
-            
+            // Режим 1: Обычное перемещение ложки на угол (без участия сервопривода)
             weapon_rotate_to_angle(&weapon_motor, (float)cmdWeaponAngle, cmdWeaponSpeed, 0, 0);
             cmdWeaponFire = false;
         }   
+        else if (cmdWeaponFireAuto) {
+            // Режим 2: Запуск автоматической последовательности выстрела
+            // Шаг А. Немедленно запускаем мотор на нужный угол и скорость
+            weapon_rotate_to_angle(&weapon_motor, (float)cmdWeaponAngle, cmdWeaponSpeed, 0, 0);
+            
+            // Шаг Б. Засекаем время и активируем таймер для спуска сервопривода
+            is_firing_sequence = true;
+            fire_sequence_start_ms = millis();
+            
+            cmdWeaponFireAuto = false;
+        }
         cmdWeaponChanged = false;
+    }
+
+    // === НЕБЛОКИРУЮЩИЙ ТАЙМЕР АВТОВЫСТРЕЛА ===
+    if (is_firing_sequence) {
+        if (now - fire_sequence_start_ms >= WEAPON_AUTO_FIRE_SERVO_DELAY_MS) {
+            // Шаг В. Задержка истекла, мотор набрал инерцию — автоматически отпускаем серво на 100 градусов
+            servo_set_angle(&servoWeapon, 100);
+            is_firing_sequence = false; // Последовательность успешно завершена
+        }
     }
     if (weapon_motor.is_rotating) {
         weapon_update_rotation(&weapon_motor);

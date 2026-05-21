@@ -86,7 +86,11 @@ const char index_html[] PROGMEM = R"rawliteral(
             <div style="margin-top:10px;" class="slider-label">Угол выстрела: <span class="value" id="wAngVal">45</span>°</div>
             <input type="range" id="wAngSlider" min="-360" max="360" value="45">
             
-            <button class="btn fire-btn" id="fire">🔫 ВЫСТРЕЛ</button>
+            <!-- Две кнопки управления в одной строке -->
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <button class="btn btn-blue" id="move" style="flex: 1; padding: 15px 5px; font-size: 13px; font-weight: bold;">⚙️ ПЕРЕМЕСТИТЬ</button>
+                <button class="btn fire-btn" id="fire" style="flex: 1; padding: 15px 5px; font-size: 13px; font-weight: bold; margin-top: 0;">🔫 ВЫСТРЕЛ</button>
+            </div>
         </div>
 
         <div class="status">
@@ -186,17 +190,39 @@ const char index_html[] PROGMEM = R"rawliteral(
             document.getElementById('wAngVal').textContent = e.target.value;
         };
 
-        // Выстрел (отправка формата "W:скорость:угол")
-        document.getElementById('fire').onclick = () => {
+        const moveBtn = document.getElementById('move');
+        const fireBtn = document.getElementById('fire');
+
+        // Обработка кнопки "ПЕРЕМЕСТИТЬ" (Обычное движение мотора)
+        moveBtn.onclick = () => {
             if (weaponRotating) return;
             const wSpd = document.getElementById('wSpdSlider').value;
             const wAng = document.getElementById('wAngSlider').value;
             
-            statEl.textContent = "🔥 ВЫСТРЕЛ (" + wAng + "°)...";
+            statEl.textContent = "⚙️ Перемещение ложки (" + wAng + "°)...";
             weaponRotating = true;
 
             if (websocket.readyState === WebSocket.OPEN) {
-                websocket.send(`W:${wSpd}:${wAng}`);
+                websocket.send(`W:${wSpd}:${wAng}`); // Шлём "W" команду
+            }
+
+            setTimeout(() => { 
+                weaponRotating = false; 
+                statEl.textContent = "Готов к бою"; 
+            }, 1500);
+        };
+
+        // Обработка кнопки "ВЫСТРЕЛ" (Автовыстрел: Мотор ложки + авто-спуск сервопривода)
+        fireBtn.onclick = () => {
+            if (weaponRotating) return;
+            const wSpd = document.getElementById('wSpdSlider').value;
+            const wAng = document.getElementById('wAngSlider').value;
+            
+            statEl.textContent = "🔥 ВЫСТРЕЛ С СЕРВО...";
+            weaponRotating = true;
+
+            if (websocket.readyState === WebSocket.OPEN) {
+                websocket.send(`F:${wSpd}:${wAng}`); // Шлём "F" команду
             }
 
             setTimeout(() => { 
