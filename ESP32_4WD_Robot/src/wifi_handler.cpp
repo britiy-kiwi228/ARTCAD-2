@@ -126,17 +126,35 @@ void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType 
 }
 
 void wifi_init() {
-    WiFi.mode(WIFI_STA);
-    WiFi.setSleep(false); // Отключаем энергосбережение Wi-Fi для снижения сетевых задержек
-    WiFi.begin(AP_SSID, AP_PASS);
+    // 1. СТИРАЕМ БИТЫЙ КЭШ ИЗ ФЛЭШ-ПАМЯТИ NVS (Решает баг "Неверный пароль")
+    WiFi.persistent(false);      // Запрещаем ESP32 сохранять/читать настройки во флэш-память
+    WiFi.disconnect(true, true); // Стираем сохраненные учетные данные Wi-Fi из SDK
+    esp_wifi_restore();          // Сбрасываем системные настройки Wi-Fi в заводские
+    delay(200);                  // Даем чипу время применить сброс памяти
+
+    // 2. Переводим Wi-Fi в режим Точки Доступа (AP)
+    WiFi.mode(WIFI_AP);
+    WiFi.setSleep(false);        // Отключаем энергосбережение Wi-Fi
+
+    // 3. Явно задаем конфигурацию IP для стабильной выдачи адресов телефонам
+    IPAddress local_ip(192, 168, 4, 1);
+    IPAddress gateway(192, 168, 4, 1);
+    IPAddress subnet(255, 255, 255, 0);
+    WiFi.softAPConfig(local_ip, gateway, subnet);
+
+    // 4. Запускаем раздачу Wi-Fi с именем и паролем из secrets.h на 6-м канале
+    bool success = WiFi.softAP(AP_SSID, AP_PASS, 6);
     
-    int attempts = 0;
-    while (WiFi.status() != WL_CONNECTED && attempts < 15) {
-        delay(500);
-        attempts++;
+    if (success) {
+        Serial.print("[AP] Сеть успешно запущена! Имя: ");
+        Serial.println(AP_SSID);
+        Serial.print("[AP] IP-адрес робота: ");
+        Serial.println(WiFi.softAPIP());
+    } else {
+        Serial.println("[AP] Ошибка запуска точки доступа! Проверьте secrets.h");
     }
-    Serial.println(WiFi.localIP());
-    esp_wifi_set_ps(WIFI_PS_NONE); 
+
+    esp_wifi_set_ps(WIFI_PS_NONE); // Отключаем энергосбережение чипа
 
     // Регистрация WebSocket в сервере
     ws.onEvent(onEvent);
