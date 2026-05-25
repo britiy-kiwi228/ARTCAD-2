@@ -53,15 +53,21 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
                 } else if (strcmp(dir, "backward") == 0) { 
                     cmdSpeedL = -spd; cmdSpeedR = -spd; 
                 } else if (strcmp(dir, "left") == 0) { 
-                    cmdSpeedL = -spd; cmdSpeedR = spd; 
+                    // ПЛАВНЫЙ ЛЕВЫЙ ПОВОРОТ: 
+                    // Правый борт крутится на полной мощности, левый — на 50%
+                    cmdSpeedL = spd / 2; 
+                    cmdSpeedR = spd; 
                 } else if (strcmp(dir, "right") == 0) { 
-                    cmdSpeedL = spd; cmdSpeedR = -spd; 
+                    // ПЛАВНЫЙ ПРАВЫЙ ПОВОРОТ: 
+                    // Левый борт крутится на полной мощности, правый — на 50%
+                    cmdSpeedL = spd; 
+                    cmdSpeedR = spd / 2; 
                 } else { 
                     cmdSpeedL = 0; cmdSpeedR = 0; 
                 }
                 cmdChanged = true;
             }
-        } 
+        }
         else if (strcmp(type, "S") == 0) { 
             // Команда сервопривода: "S:угол"
             char* angle_str = strtok(NULL, ":");
