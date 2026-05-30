@@ -54,14 +54,14 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
                     cmdSpeedL = -spd; cmdSpeedR = -spd; 
                 } else if (strcmp(dir, "left") == 0) { 
                     // ПЛАВНЫЙ ЛЕВЫЙ ПОВОРОТ: 
-                    // Правый борт крутится на полной мощности, левый — на 50%
-                    cmdSpeedL = spd / 2; 
+                    // Правый борт крутится на полной мощности, левый — на 50% назад
+                    cmdSpeedL = -(spd / 2); 
                     cmdSpeedR = spd; 
                 } else if (strcmp(dir, "right") == 0) { 
                     // ПЛАВНЫЙ ПРАВЫЙ ПОВОРОТ: 
-                    // Левый борт крутится на полной мощности, правый — на 50%
+                    // Левый борт крутится на полной мощности, правый — на 50% назад
                     cmdSpeedL = spd; 
-                    cmdSpeedR = spd / 2; 
+                    cmdSpeedR = -(spd / 2); 
                 } else { 
                     cmdSpeedL = 0; cmdSpeedR = 0; 
                 }

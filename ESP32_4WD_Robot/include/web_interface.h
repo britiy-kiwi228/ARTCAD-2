@@ -26,8 +26,38 @@ const char index_html[] PROGMEM = R"rawliteral(
         .distance-value { font-size: 40px; font-weight: bold; color: #00ff00; }
 
         .control-group { margin-bottom: 20px; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px; }
-        .slider-label { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 14px; }
-        .value { color: #4daeff; font-weight: bold; }
+        .slider-label { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 14px; }
+        
+        /* Стилизация полей ввода для ручной калибровки */
+        .val-input {
+            width: 70px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(77,174,255,0.3);
+            border-radius: 8px;
+            color: #4daeff;
+            font-weight: bold;
+            text-align: center;
+            font-size: 15px;
+            padding: 4px;
+            outline: none;
+            transition: 0.2s;
+        }
+        .val-input:focus {
+            border-color: #4daeff;
+            background: rgba(77,174,255,0.1);
+            box-shadow: 0 0 8px rgba(77,174,255,0.4);
+        }
+
+        /* Прячем стрелочки вверх-вниз в полях типа "number" для чистоты дизайна */
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type="number"] {
+            -moz-appearance: textfield;
+        }
+
         input[type="range"] { width: 100%; height: 8px; border-radius: 5px; cursor: pointer; }
 
         .movement-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 20px 0; }
@@ -58,7 +88,10 @@ const char index_html[] PROGMEM = R"rawliteral(
 
         <!-- Ходовая -->
         <div class="control-group">
-            <div class="slider-label">Скорость езды: <span class="value" id="spdVal">128</span></div>
+            <div class="slider-label">
+                <span>Скорость езды:</span>
+                <input type="number" class="val-input" id="spdInput" min="0" max="255" value="128">
+            </div>
             <input type="range" id="spdSlider" min="0" max="255" value="128">
         </div>
 
@@ -72,7 +105,13 @@ const char index_html[] PROGMEM = R"rawliteral(
 
         <!-- Серво -->
         <div class="control-group">
-            <div class="slider-label">Угол Серво: <span class="value" id="srvVal">90</span>°</div>
+            <div class="slider-label">
+                <span>Угол Серво:</span>
+                <span style="display:flex; align-items:center;">
+                    <input type="number" class="val-input" id="srvInput" min="0" max="180" value="90">
+                    <span style="color:#4daeff; margin-left:4px; font-weight:bold;">°</span>
+                </span>
+            </div>
             <input type="range" id="srvSlider" min="0" max="180" value="90">
         </div>
 
@@ -80,13 +119,21 @@ const char index_html[] PROGMEM = R"rawliteral(
         <div class="control-group weapon-panel">
             <h3 style="text-align:center; color:#ff6400; margin-bottom:10px;">⚔️ КАТАПУЛЬТА</h3>
             
-            <div class="slider-label">Мощность мотора: <span class="value" id="wSpdVal">200</span></div>
+            <div class="slider-label">
+                <span>Мощность мотора:</span>
+                <input type="number" class="val-input" id="wSpdInput" min="50" max="255" value="200" style="color:#ff6400; border-color:rgba(255,100,0,0.3);">
+            </div>
             <input type="range" id="wSpdSlider" min="50" max="255" value="200">
             
-            <div style="margin-top:10px;" class="slider-label">Угол выстрела: <span class="value" id="wAngVal">45</span>°</div>
+            <div style="margin-top:10px;" class="slider-label">
+                <span>Угол выстрела:</span>
+                <span style="display:flex; align-items:center;">
+                    <input type="number" class="val-input" id="wAngInput" min="-360" max="360" value="45" style="color:#ff6400; border-color:rgba(255,100,0,0.3);">
+                    <span style="color:#ff6400; margin-left:4px; font-weight:bold;">°</span>
+                </span>
+            </div>
             <input type="range" id="wAngSlider" min="-360" max="360" value="45">
             
-            <!-- Две кнопки управления в одной строке -->
             <div style="display: flex; gap: 10px; margin-top: 15px;">
                 <button class="btn btn-blue" id="move" style="flex: 1; padding: 15px 5px; font-size: 13px; font-weight: bold;">⚙️ ПЕРЕМЕСТИТЬ</button>
                 <button class="btn fire-btn" id="fire" style="flex: 1; padding: 15px 5px; font-size: 13px; font-weight: bold; margin-top: 0;">🔫 ВЫСТРЕЛ</button>
@@ -108,8 +155,16 @@ const char index_html[] PROGMEM = R"rawliteral(
         const distEl = document.getElementById('dist');
         const statEl = document.getElementById('statText');
         const indEl = document.getElementById('indicator');
+        
+        // Слайдеры и Поля ввода
         const spdSlider = document.getElementById('spdSlider');
+        const spdInput = document.getElementById('spdInput');
         const srvSlider = document.getElementById('srvSlider');
+        const srvInput = document.getElementById('srvInput');
+        const wSpdSlider = document.getElementById('wSpdSlider');
+        const wSpdInput = document.getElementById('wSpdInput');
+        const wAngSlider = document.getElementById('wAngSlider');
+        const wAngInput = document.getElementById('wAngInput');
 
         // Инициализация WebSocket
         let gateway = `ws://${window.location.host}/ws`;
@@ -131,11 +186,10 @@ const char index_html[] PROGMEM = R"rawliteral(
         function onClose(event) {
             indEl.classList.remove('online');
             statEl.textContent = "Связь потеряна. Повторное подключение...";
-            setTimeout(initWebSocket, 2000); // Авто-реконнект каждые 2 секунды
+            setTimeout(initWebSocket, 2000);
         }
 
         function onMessage(event) {
-            // Прием телеметрии от ESP32
             let data = event.data;
             if (data.startsWith("D:")) {
                 let dist = parseFloat(data.substring(2));
@@ -143,7 +197,7 @@ const char index_html[] PROGMEM = R"rawliteral(
             }
         }
 
-        // Движение (отправка формата "M:направление:скорость")
+        // Движение
         function sendMove(dir, spd) {
             const now = Date.now();
             if (dir !== 'stop' && dir === curDir && spd === curSpd && (now - lastMoveTime < 100)) return;
@@ -160,9 +214,10 @@ const char index_html[] PROGMEM = R"rawliteral(
         document.getElementById('rgt').onclick = () => sendMove('right', curSpd);
         document.getElementById('stp').onclick = () => sendMove('stop', 0);
 
+        // === СИНХРОНИЗАЦИЯ: Скорость езды ===
         let throttleTimeout = null;
         spdSlider.oninput = (e) => {
-            document.getElementById('spdVal').textContent = e.target.value;
+            spdInput.value = e.target.value;
             if (!throttleTimeout) {
                 throttleTimeout = setTimeout(() => {
                     curSpd = e.target.value;
@@ -171,39 +226,85 @@ const char index_html[] PROGMEM = R"rawliteral(
                 }, 50);
             }
         };
+        spdInput.oninput = (e) => {
+            let val = parseInt(e.target.value);
+            if (isNaN(val)) return;
+            if (val < 0) val = 0;
+            if (val > 255) val = 255;
+            spdSlider.value = val;
+            curSpd = val;
+            if (curDir !== 'stop') sendMove(curDir, curSpd);
+        };
+        spdInput.onblur = (e) => {
+            if (e.target.value === "") spdInput.value = spdSlider.value;
+        };
 
-        // Серво (отправка формата "S:угол")
+        // === СИНХРОНИЗАЦИЯ: Угол Серво ===
         srvSlider.oninput = (e) => {
-            document.getElementById('srvVal').textContent = e.target.value;
+            srvInput.value = e.target.value;
         };
         srvSlider.onchange = (e) => {
             if (websocket.readyState === WebSocket.OPEN) {
                 websocket.send(`S:${e.target.value}`);
             }
         };
-
-        // Оружие
-        document.getElementById('wSpdSlider').oninput = (e) => {
-            document.getElementById('wSpdVal').textContent = e.target.value;
+        srvInput.oninput = (e) => {
+            let val = parseInt(e.target.value);
+            if (isNaN(val)) return;
+            if (val < 0) val = 0;
+            if (val > 180) val = 180;
+            srvSlider.value = val;
+            if (websocket.readyState === WebSocket.OPEN) {
+                websocket.send(`S:${val}`);
+            }
         };
-        document.getElementById('wAngSlider').oninput = (e) => {
-            document.getElementById('wAngVal').textContent = e.target.value;
+        srvInput.onblur = (e) => {
+            if (e.target.value === "") srvInput.value = srvSlider.value;
         };
 
+        // === СИНХРОНИЗАЦИЯ: Мощность оружия ===
+        wSpdSlider.oninput = (e) => {
+            wSpdInput.value = e.target.value;
+        };
+        wSpdInput.oninput = (e) => {
+            let val = parseInt(e.target.value);
+            if (isNaN(val)) return;
+            if (val < 50) val = 50;
+            if (val > 255) val = 255;
+            wSpdSlider.value = val;
+        };
+        wSpdInput.onblur = (e) => {
+            if (e.target.value === "") wSpdInput.value = wSpdSlider.value;
+        };
+
+        // === СИНХРОНИЗАЦИЯ: Угол оружия ===
+        wAngSlider.oninput = (e) => {
+            wAngInput.value = e.target.value;
+        };
+        wAngInput.oninput = (e) => {
+            let val = parseInt(e.target.value);
+            if (isNaN(val)) return;
+            if (val < -360) val = -360;
+            if (val > 360) val = 360;
+            wAngSlider.value = val;
+        };
+        wAngInput.onblur = (e) => {
+            if (e.target.value === "") wAngInput.value = wAngSlider.value;
+        };
+
+
+        // Оружие: Переместить
         const moveBtn = document.getElementById('move');
-        const fireBtn = document.getElementById('fire');
-
-        // Обработка кнопки "ПЕРЕМЕСТИТЬ" (Обычное движение мотора)
         moveBtn.onclick = () => {
             if (weaponRotating) return;
-            const wSpd = document.getElementById('wSpdSlider').value;
-            const wAng = document.getElementById('wAngSlider').value;
+            const wSpd = wSpdSlider.value;
+            const wAng = wAngSlider.value;
             
             statEl.textContent = "⚙️ Перемещение ложки (" + wAng + "°)...";
             weaponRotating = true;
 
             if (websocket.readyState === WebSocket.OPEN) {
-                websocket.send(`W:${wSpd}:${wAng}`); // Шлём "W" команду
+                websocket.send(`W:${wSpd}:${wAng}`);
             }
 
             setTimeout(() => { 
@@ -212,17 +313,18 @@ const char index_html[] PROGMEM = R"rawliteral(
             }, 1500);
         };
 
-        // Обработка кнопки "ВЫСТРЕЛ" (Автовыстрел: Мотор ложки + авто-спуск сервопривода)
+        // Оружие: Выстрел с авто-серво
+        const fireBtn = document.getElementById('fire');
         fireBtn.onclick = () => {
             if (weaponRotating) return;
-            const wSpd = document.getElementById('wSpdSlider').value;
-            const wAng = document.getElementById('wAngSlider').value;
+            const wSpd = wSpdSlider.value;
+            const wAng = wAngSlider.value;
             
             statEl.textContent = "🔥 ВЫСТРЕЛ С СЕРВО...";
             weaponRotating = true;
 
             if (websocket.readyState === WebSocket.OPEN) {
-                websocket.send(`F:${wSpd}:${wAng}`); // Шлём "F" команду
+                websocket.send(`F:${wSpd}:${wAng}`);
             }
 
             setTimeout(() => { 
@@ -231,10 +333,10 @@ const char index_html[] PROGMEM = R"rawliteral(
             }, 1500);
         };
 
-        // WebSocket Heartbeat (для FailSafe)
+        // WebSocket Heartbeat
         setInterval(() => {
             if (websocket && websocket.readyState === WebSocket.OPEN) {
-                websocket.send('H'); // Передаем минимальный пакет
+                websocket.send('H');
             }
         }, 500);
         

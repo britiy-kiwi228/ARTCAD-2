@@ -69,7 +69,7 @@
 #define WEAPON_ROTATION_SPEED 200      
 #define WEAPON_MOTOR_LOAD_THRESHOLD 50
 // --- Настройки автовыстрела ---
-#define WEAPON_AUTO_FIRE_SERVO_DELAY_MS  20  // Задержка (в мс) перед спуском сервопривода из 0 в 100 градусов
+#define WEAPON_AUTO_FIRE_SERVO_DELAY_MS  1  // Задержка (в мс) перед спуском сервопривода из 0 в 100 градусов
 
 // --- Параметры движения ---
 #define MOTOR_MAX_SPEED   255              
